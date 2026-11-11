@@ -51,11 +51,11 @@ Requirements:
      OPENAI_API_KEY=your_api_key_here
 
      # Backend Service
-     BACKEND_PORT=8000
+     BACKEND_PORT=8001
      UPLOAD_DIR=./data/uploads
 
      # Frontend Service
-     NEXT_PUBLIC_API_URL=http://localhost:8000/api
+     NEXT_PUBLIC_API_URL=http://localhost:8001/api
      ```
 
 3. Root `docker-compose.yml`:
@@ -125,34 +125,48 @@ Verification:
 
 ---
 
-## Phase 1: Monorepo Scaffolding (FastAPI + Next.js)
+## Phase 1: Monorepo Scaffolding (FastAPI + Next.js + Dev Container)
 
 ### 📋 Antigravity Prompt (Copy & Paste):
 ```text
-Task: Scaffold the FastAPI backend (`backend/`) and Next.js frontend (`frontend/`) and verify connectivity to both MongoDB containers.
+Task: Scaffold the Dev Container environment, FastAPI backend (`backend/`), Next.js frontend (`frontend/`), and root orchestration for the monorepo, verifying connectivity to both MongoDB containers on backend port 8001.
 
 Context:
-- Before starting, read `.reference/INDEX.md` to confirm our reference repos (`retab-ui` and `bdi-kit`) are synced.
+- Before starting, verify that `.reference/INDEX.md` is populated (run `python3 scripts/sync_references.py` if missing).
 - Note that `motor` is deprecated; use PyMongo's native `AsyncMongoClient` (`from pymongo import AsyncMongoClient`).
-- Include `pillow` (required by `pypdfium2` `.to_pil()`) and `bdi-kit` + `pandas` (required for Phase 5 harmonization).
+- Backend runs on port 8001 (`BACKEND_PORT=8001`), NOT 8000.
+- Frontend uses Next.js 14 LTS (React 18) for maximum peer-dependency stability with `@retab/schema-builder` and shadcn/ui.
+- Backend lifespan must be resilient: if MongoDB is still booting, the server starts cleanly and `/api/health` indicates individual DB reachability without crashing.
 
 Requirements:
-1. Backend Scaffolding (`backend/`):
-   - Create `pyproject.toml` and `requirements.txt` with permissive-licensed packages:
-     `fastapi>=0.115.0`, `uvicorn[standard]>=0.30.0`, `pydantic-settings>=2.4.0`, `pymongo>=4.10.0`, `pypdfium2>=4.30.0`, `pillow>=10.4.0`, `litellm>=1.50.0`, `bdi-kit>=0.11.0`, `pandas>=2.2.0`, `python-multipart>=0.0.9`, `httpx>=0.27.0`, `sse-starlette>=2.1.0`.
-   - Create `backend/app/config.py` using `pydantic-settings` (`SettingsConfigDict(env_file="../.env", extra="ignore")`) loading `APP_MONGODB_URI`, `TARGET_MONGODB_URI`, `LLM_API_BASE`, `LLM_API_KEY`, `LLM_MODEL`, `BACKEND_PORT`, and `UPLOAD_DIR`.
-   - Create `backend/app/database.py` initializing two `AsyncMongoClient` instances (`app_client` -> `app_db` and `target_client` -> `target_db`) using lifespan context management and exposing a `ping_databases()` healthcheck function.
-   - Create `backend/app/main.py` with FastAPI, lifespan handler, CORS middleware allowing `http://localhost:3000` and `http://localhost:3001`, and `GET /api/health` returning the connection status of both `app_db` and `target_db`.
+1. Unified Dev Container Configuration (`.devcontainer/`):
+   - Create `.devcontainer/devcontainer.json` referencing a unified Docker Compose setup (`.devcontainer/docker-compose.yml` extending or integrating the root `docker-compose.yml`).
+   - Image/Dockerfile includes Python 3.11+ and Node.js 20 LTS, with VS Code extensions for Python, Pylance, Tailwind CSS, and ESLint.
+   - Forwards ports 3000 (frontend), 8001 (backend), 27017 (`mongo-app`), and 27018 (`mongo-target`).
 
-2. Frontend Scaffolding (`frontend/`):
-   - Initialize Next.js (TypeScript, Tailwind CSS, App Router, `src/` directory) non-interactively.
+2. Backend Scaffolding (`backend/`):
+   - Create `pyproject.toml` and `requirements.txt` with permissive-licensed packages:
+     `fastapi>=0.115.0`, `uvicorn[standard]>=0.30.0`, `pydantic-settings>=2.4.0`, `pymongo>=4.10.0`, `pypdfium2>=4.30.0`, `pillow>=10.4.0`, `litellm>=1.50.0`, `bdi-kit>=0.11.0`, `pandas>=2.2.0`, `python-multipart>=0.0.9`, `httpx>=0.27.0`, `sse-starlette>=2.1.0`, `pytest>=8.3.0`, `pytest-asyncio>=0.24.0`.
+   - Create `backend/app/config.py` using `pydantic-settings` (`SettingsConfigDict(env_file="../.env", extra="ignore")`) loading `APP_MONGODB_URI`, `TARGET_MONGODB_URI`, `LLM_API_BASE`, `LLM_API_KEY`, `LLM_MODEL`, `BACKEND_PORT` (default 8001), and `UPLOAD_DIR`.
+   - Create `backend/app/database.py` initializing two `AsyncMongoClient` instances (`app_client` -> `app_db` and `target_client` -> `target_db`). Implement non-blocking lifespan connection handling (log warning on connection error, do not crash on launch) and expose `ping_databases() -> dict[str, bool]`.
+   - Create `backend/app/main.py` with FastAPI, lifespan handler, CORS middleware allowing `http://localhost:3000` and `http://localhost:3001`, and `GET /api/health` returning `{ "status": "ok", "databases": { "app_db": bool, "target_db": bool } }`.
+   - Create `backend/tests/test_health.py` with pytest tests verifying `/api/health` returns 200 with database status structure using FastAPI `AsyncClient` / `TestClient`.
+
+3. Frontend Scaffolding (`frontend/`):
+   - Initialize Next.js 14 LTS (`create-next-app` pinned to Next.js 14 with React 18, TypeScript, Tailwind CSS, App Router, `src/` directory) non-interactively.
    - Install utility packages: `lucide-react`, `clsx`, `tailwind-merge`, `class-variance-authority`.
    - Configure `frontend/components.json` for shadcn/ui and register the `@retab` registry URL (`"registries": { "@retab": "https://ui.retab.com/r/{name}.json" }`).
-   - Create `frontend/src/lib/api-client.ts` pointing to `process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"`.
+   - Create `frontend/src/lib/api-client.ts` pointing to `process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001/api"`.
+   - Update `frontend/src/app/page.tsx` with a starter workbench shell displaying backend connection status fetched from `GET /api/health`.
+
+4. Root Monorepo Orchestration:
+   - Create root `package.json` with `concurrently`:
+     - `"scripts": { "dev": "concurrently -n \"API,WEB\" -c \"blue,green\" \"npm run dev:backend\" \"npm run dev:frontend\"", "dev:backend": "cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload", "dev:frontend": "cd frontend && npm run dev", "test": "cd backend && pytest && cd ../frontend && npm run build" }`
 
 Verification:
-- Create a Python virtual environment in `backend/.venv`, install `requirements.txt`, start FastAPI, and call `GET http://localhost:8000/api/health` to confirm both `app_db` (27017) and `target_db` (27018) return `"connected": true`.
-- Run `npm run build` in `frontend/` to confirm Next.js compiles cleanly.
+- Run automated tests: `cd backend && pytest tests/` confirming health endpoint tests pass.
+- Run `npm run build` in `frontend/` to confirm Next.js 14 compiles with zero errors.
+- Start dev environment with `npm run dev` and verify `GET http://localhost:8001/api/health` returns connection status and `http://localhost:3000` renders the starter workbench.
 ```
 
 ---
@@ -190,7 +204,7 @@ Requirements:
      - "Import / Export Raw JSON" toggle.
 
 Verification:
-- Verify `GET http://localhost:8000/api/schemas` returns the seeded default schemas.
+- Verify `GET http://localhost:8001/api/schemas` returns the seeded default schemas.
 - Run `npm run build` in `frontend/` to verify the real `@retab/schema-builder` and all its TypeScript types compile with zero errors.
 ```
 
@@ -359,7 +373,7 @@ Requirements:
 
 2. Production Packaging (`backend/Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml`):
    - `backend/Dockerfile`: Python 3.11 slim image installing `requirements.txt` and running Uvicorn.
-   - `frontend/Dockerfile`: Multi-stage Node 20 Alpine build accepting `ARG NEXT_PUBLIC_API_URL=http://localhost:8000/api` at build time.
+   - `frontend/Dockerfile`: Multi-stage Node 20 Alpine build accepting `ARG NEXT_PUBLIC_API_URL=http://localhost:8001/api` at build time.
    - Update `docker-compose.yml` so `backend` uses `APP_MONGODB_URI=mongodb://mongo-app:27017/extraction_app_db` and `TARGET_MONGODB_URI=mongodb://mongo-target:27017/company_enterprise_db`.
 
 3. End-to-End Smoke Test (`scripts/test_pipeline.py`):
