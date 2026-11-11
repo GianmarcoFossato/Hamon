@@ -51,11 +51,11 @@ Requirements:
      OPENAI_API_KEY=your_api_key_here
 
      # Backend Service
-     BACKEND_PORT=8000
+     BACKEND_PORT=8001
      UPLOAD_DIR=./data/uploads
 
      # Frontend Service
-     NEXT_PUBLIC_API_URL=http://localhost:8000/api
+     NEXT_PUBLIC_API_URL=http://localhost:8001/api
      ```
 
 3. Root `docker-compose.yml`:
@@ -148,10 +148,10 @@ Requirements:
    - Initialize Next.js (TypeScript, Tailwind CSS, App Router, `src/` directory) non-interactively.
    - Install utility packages: `lucide-react`, `clsx`, `tailwind-merge`, `class-variance-authority`.
    - Configure `frontend/components.json` for shadcn/ui and register the `@retab` registry URL (`"registries": { "@retab": "https://ui.retab.com/r/{name}.json" }`).
-   - Create `frontend/src/lib/api-client.ts` pointing to `process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"`.
+   - Create `frontend/src/lib/api-client.ts` pointing to `process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001/api"`.
 
 Verification:
-- Create a Python virtual environment in `backend/.venv`, install `requirements.txt`, start FastAPI, and call `GET http://localhost:8000/api/health` to confirm both `app_db` (27017) and `target_db` (27018) return `"connected": true`.
+- Create a Python virtual environment in `backend/.venv`, install `requirements.txt`, start FastAPI, and call `GET http://localhost:8001/api/health` to confirm both `app_db` (27017) and `target_db` (27018) return `"connected": true`.
 - Run `npm run build` in `frontend/` to confirm Next.js compiles cleanly.
 ```
 
@@ -190,7 +190,7 @@ Requirements:
      - "Import / Export Raw JSON" toggle.
 
 Verification:
-- Verify `GET http://localhost:8000/api/schemas` returns the seeded default schemas.
+- Verify `GET http://localhost:8001/api/schemas` returns the seeded default schemas.
 - Run `npm run build` in `frontend/` to verify the real `@retab/schema-builder` and all its TypeScript types compile with zero errors.
 ```
 
@@ -359,7 +359,7 @@ Requirements:
 
 2. Production Packaging (`backend/Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml`):
    - `backend/Dockerfile`: Python 3.11 slim image installing `requirements.txt` and running Uvicorn.
-   - `frontend/Dockerfile`: Multi-stage Node 20 Alpine build accepting `ARG NEXT_PUBLIC_API_URL=http://localhost:8000/api` at build time.
+   - `frontend/Dockerfile`: Multi-stage Node 20 Alpine build accepting `ARG NEXT_PUBLIC_API_URL=http://localhost:8001/api` at build time.
    - Update `docker-compose.yml` so `backend` uses `APP_MONGODB_URI=mongodb://mongo-app:27017/extraction_app_db` and `TARGET_MONGODB_URI=mongodb://mongo-target:27017/company_enterprise_db`.
 
 3. End-to-End Smoke Test (`scripts/test_pipeline.py`):
