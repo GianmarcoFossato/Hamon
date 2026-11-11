@@ -11,7 +11,14 @@
       "url": "https://github.com/VIDA-NYU/bdi-kit.git",
       "branch": "devel",
       "description": "NYU VIDA BDI-Kit library for schema matching, value matching, and data harmonization"
+    },
+    {
+      "name": "lift",
+      "url": "https://github.com/datalab-to/lift.git",
+      "branch": "master",
+      "description": "Lift extracts structured JSON from PDFs and images by passing a schema (use api call instead of datalab's model)."
     }
+
   ],
   "documentation_sites": [
     {
@@ -21,13 +28,16 @@
         "https://bdi-kit.readthedocs.io/stable/quick-start.html",
         "https://bdi-kit.readthedocs.io/stable/how-works.html",
         "https://bdi-kit.readthedocs.io/stable/schema-matching.html",
-        "https://bdi-kit.readthedocs.io/stable/value-matching.html"
+        "https://bdi-kit.readthedocs.io/stable/value-matching.html",
+        "https://bdi-kit.readthedocs.io/stable/installation.html"
       ]
     },
     {
       "name": "retab-ui-docs",
       "url": "https://ui.retab.com/docs",
       "key_pages": [
+        "https://ui.retab.com/docs/components/file-viewer",
+        "https://ui.retab.com/docs/components",
         "https://ui.retab.com/r/schema-builder.json"
       ]
     },
