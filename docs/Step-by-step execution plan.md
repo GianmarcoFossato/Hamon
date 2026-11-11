@@ -79,6 +79,12 @@ Requirements:
            "url": "https://github.com/VIDA-NYU/bdi-kit.git",
            "branch": "devel",
            "description": "NYU VIDA BDI-Kit library for schema matching, value matching, and data harmonization"
+         },
+         {
+           "name": "lift",
+           "url": "https://github.com/datalab-to/lift.git",
+           "branch": "master",
+           "description": "Lift extracts structured JSON from PDFs and images by passing a schema (use api call instead of datalab's model)."
          }
        ],
        "documentation_sites": [
@@ -89,13 +95,16 @@ Requirements:
              "https://bdi-kit.readthedocs.io/stable/quick-start.html",
              "https://bdi-kit.readthedocs.io/stable/how-works.html",
              "https://bdi-kit.readthedocs.io/stable/schema-matching.html",
-             "https://bdi-kit.readthedocs.io/stable/value-matching.html"
+             "https://bdi-kit.readthedocs.io/stable/value-matching.html",
+             "https://bdi-kit.readthedocs.io/stable/installation.html"
            ]
          },
          {
            "name": "retab-ui-docs",
            "url": "https://ui.retab.com/docs",
            "key_pages": [
+             "https://ui.retab.com/docs/components/file-viewer",
+             "https://ui.retab.com/docs/components",
              "https://ui.retab.com/r/schema-builder.json"
            ]
          },
@@ -141,12 +150,12 @@ Context:
 Requirements:
 1. Unified Dev Container Configuration (`.devcontainer/`):
    - Create `.devcontainer/devcontainer.json` referencing a unified Docker Compose setup (`.devcontainer/docker-compose.yml` extending or integrating the root `docker-compose.yml`).
-   - Image/Dockerfile includes Python 3.11+ and Node.js 20 LTS, with VS Code extensions for Python, Pylance, Tailwind CSS, and ESLint.
+   - Image/Dockerfile includes Python 3.12+ and Node.js 20 LTS, with VS Code extensions for Python, Pylance, Tailwind CSS, and ESLint.
    - Forwards ports 3000 (frontend), 8001 (backend), 27017 (`mongo-app`), and 27018 (`mongo-target`).
 
 2. Backend Scaffolding (`backend/`):
    - Create `pyproject.toml` and `requirements.txt` with permissive-licensed packages:
-     `fastapi>=0.115.0`, `uvicorn[standard]>=0.30.0`, `pydantic-settings>=2.4.0`, `pymongo>=4.10.0`, `pypdfium2>=4.30.0`, `pillow>=10.4.0`, `litellm>=1.50.0`, `bdi-kit>=0.11.0`, `pandas>=2.2.0`, `python-multipart>=0.0.9`, `httpx>=0.27.0`, `sse-starlette>=2.1.0`, `pytest>=8.3.0`, `pytest-asyncio>=0.24.0`.
+     `fastapi>=0.115.0`, `uvicorn[standard]>=0.30.0`, `pydantic-settings>=2.4.0`, `pymongo>=4.10.0`, `pypdfium2>=4.30.0`, `pillow>=10.4.0`, `litellm>=1.50.0`, `bdi-kit>=0.11.0`, `pandas>=2.2.0`, `python-multipart>=0.0.9`, `httpx>=0.27.0`, `sse-starlette>=2.1.0`, `filetype>=1.2.0`, `json-schema-to-pydantic>=0.4.11`, `pytest>=8.3.0`, `pytest-asyncio>=0.24.0`.
    - Create `backend/app/config.py` using `pydantic-settings` (`SettingsConfigDict(env_file="../.env", extra="ignore")`) loading `APP_MONGODB_URI`, `TARGET_MONGODB_URI`, `LLM_API_BASE`, `LLM_API_KEY`, `LLM_MODEL`, `BACKEND_PORT` (default 8001), and `UPLOAD_DIR`.
    - Create `backend/app/database.py` initializing two `AsyncMongoClient` instances (`app_client` -> `app_db` and `target_client` -> `target_db`). Implement non-blocking lifespan connection handling (log warning on connection error, do not crash on launch) and expose `ping_databases() -> dict[str, bool]`.
    - Create `backend/app/main.py` with FastAPI, lifespan handler, CORS middleware allowing `http://localhost:3000` and `http://localhost:3001`, and `GET /api/health` returning `{ "status": "ok", "databases": { "app_db": bool, "target_db": bool } }`.
@@ -210,31 +219,37 @@ Verification:
 
 ---
 
-## Phase 3: PDF Ingestion & LiteLLM Strict Extraction Pipeline
+## Phase 3: Lift-Powered Document Preprocessing & LiteLLM Vision Extraction Pipeline
 
 ### 📋 Antigravity Prompt (Copy & Paste):
 ```text
-Task: Implement the PDF upload & page-rendering service (`pypdfium2` + `Pillow`), document serving endpoints, and the async LiteLLM Vision extraction pipeline with OpenAI Strict Schema normalization and SSE status streaming.
+Task: Implement the document ingestion & page-rendering pipeline leveraging `lift`'s preprocessing primitives (`lift.input`, `lift.schema_builder`, `lift.model.util`), document serving endpoints, and the async LiteLLM Vision extraction pipeline calling our custom LLM API endpoint.
 
 Context:
-- `pypdfium2`'s `page.render()` does NOT take a `dpi` keyword argument; it takes `scale = dpi / 72.0`, followed by `.to_pil()` (which requires `Pillow`).
-- OpenAI / LiteLLM Structured Outputs with `"strict": True` will reject schemas with a `400 BadRequestError` unless every `object` node has `"additionalProperties": False` and lists all properties inside `"required"` (making optional properties nullable, e.g., `["string", "null"]`). We must normalize the user's JSON schema before sending it to `litellm.acompletion`.
+- Grounding: Inspect `.reference/repos/lift` (`lift/input.py`, `lift/schema_builder.py`, `lift/model/vllm.py`, `lift/prompts.py`).
+- MODEL INDEPENDENCE: We use `lift` for document ingestion, page range handling, annotation flattening, and schema transformations, but strictly DO NOT load Datalab's model or install heavy ML model dependencies (`torch`, `transformers`, `accelerate`). All generation is dispatched via `LiteLLM` to our custom endpoint configured via `LLM_API_BASE` and `LLM_API_KEY`.
+- OpenAI / LiteLLM Structured Outputs with `"strict": True` reject schemas unless all fields in `properties` are required and nullable. Use `lift.model.vllm.make_properties_nullable` to normalize user schemas.
 
 Requirements:
-1. PDF Service & Document Router (`backend/app/services/pdf_service.py` & `backend/app/routers/documents.py`):
-   - `save_pdf(file: UploadFile) -> dict`: Saves uploaded PDF to `{UPLOAD_DIR}/{doc_id}/document.pdf`, counts pages via `pypdfium2.PdfDocument`, and inserts metadata into `app_db.documents`.
-   - `render_pages_to_images(doc_id: str, dpi: int = 200) -> list[str]`: Renders each page using `bitmap = page.render(scale=dpi / 72.0)` and `bitmap.to_pil().save(...)` to `{UPLOAD_DIR}/{doc_id}/page_{i}.png`.
+1. Document Preprocessing Service & Router (`backend/app/services/pdf_service.py` & `backend/app/routers/documents.py`):
+   - Adapt `lift.input.load_file` and `load_pdf_images`:
+     - Load PDFs and images using `pypdfium2` and `Pillow`.
+     - Flatten form annotations via `pdfium_c.FPDFPage_Flatten`.
+     - Support page range parsing (`"0-5,7"`) via `lift.input.parse_range_str`.
+     - Scale dimensions using `lift.model.util.scale_to_fit`.
+   - `save_pdf(file: UploadFile) -> dict`: Saves uploaded file to `{UPLOAD_DIR}/{doc_id}/document.pdf` and inserts metadata into `app_db.documents`.
+   - `render_pages_to_images(doc_id: str, page_range: Optional[str] = None) -> list[str]`: Saves rendered page PNGs to `{UPLOAD_DIR}/{doc_id}/page_{i}.png`.
    - `encode_images_base64(image_paths: list[str]) -> list[str]`: Encodes PNGs to `data:image/png;base64,...` data URIs.
    - Implement `backend/app/routers/documents.py`:
-     - `POST /api/documents/upload`: Uploads a PDF and returns `{document_id, filename, page_count}`.
-     - `GET /api/documents/{doc_id}/file`: Streams the raw PDF (`FileResponse` with `application/pdf`) for the frontend PDF viewer.
-     - `GET /api/documents/{doc_id}/pages/{page_number}`: Serves the rendered PNG image for a specific page.
+     - `POST /api/documents/upload`: Uploads a PDF/image and returns `{document_id, filename, page_count}`.
+     - `GET /api/documents/{doc_id}/file`: Streams the raw file (`FileResponse`) for the frontend viewer.
+     - `GET /api/documents/{doc_id}/pages/{page_number}`: Serves rendered PNG for a specific page.
 
-2. LiteLLM Vision Service (`backend/app/services/litellm_service.py`):
-   - Implement `normalize_schema_for_strict_mode(schema: dict) -> dict`: Recursively deep-copies the JSON Schema, sets `"additionalProperties": False` on every object, and ensures all keys in `"properties"` are listed in `"required"` (wrapping any previously non-required property's `"type"` into a nullable union `[original_type, "null"]`).
+2. LiteLLM Extraction Service (`backend/app/services/litellm_service.py`):
+   - Use `lift.schema_builder.validate_schema` to validate user JSON schema.
+   - Use `lift.model.vllm.make_properties_nullable` to format schema for strict structured outputs.
    - Implement `extract_from_images(base64_images: list[str], json_schema: dict) -> dict` using `await litellm.acompletion`:
      ```python
-     strict_schema = normalize_schema_for_strict_mode(json_schema)
      response = await litellm.acompletion(
          model=settings.LLM_MODEL,
          api_base=settings.LLM_API_BASE,
@@ -251,15 +266,16 @@ Requirements:
          temperature=0.0
      )
      ```
+   - Use `lift.output.load_output` for parsing and `lift.model.util.detect_repeat_token` to detect repeating generation loops and retry.
 
 3. Async Extraction Job & SSE Router (`backend/app/routers/extract.py`):
-   - `POST /api/extract/start`: Accepts `document_id` and `schema_id` (or inline `json_schema`). Creates a job record in `app_db.jobs` (`status="pending"`) and launches an async background task (`queued` -> `rendering_pages` -> `calling_vlm` -> `completed` / `failed`).
+   - `POST /api/extract/start`: Accepts `document_id` and `schema_id` (or inline `json_schema`). Creates job record in `app_db.jobs` (`status="pending"`) and launches async background task (`queued` -> `rendering_pages` -> `calling_vlm` -> `completed` / `failed`).
    - `GET /api/extract/jobs`: Lists all extraction jobs for the History view.
    - `GET /api/extract/status/{job_id}`: Returns full job document including `raw_extraction`.
-   - `GET /api/extract/stream/{job_id}`: Streams real-time SSE status updates until completion or failure.
+   - `GET /api/extract/stream/{job_id}`: Streams real-time SSE status updates.
 
 Verification:
-- Write and run a test that uploads a sample PDF to `POST /api/documents/upload`, fetches `GET /api/documents/{doc_id}/file`, and verifies `normalize_schema_for_strict_mode()` properly transforms nested objects and optional fields.
+- Write and run a test that uploads a sample PDF to `POST /api/documents/upload`, verifies `load_file` and page flattening, and verifies strict schema normalization.
 ```
 
 ---
@@ -308,9 +324,10 @@ Context:
 - Verify the exact signatures of `bdikit`:
   - `import bdikit as bdi`
   - `bdi.match_schema(source, target, method=...)`
-  - `bdi.top_matches(source, target, columns=..., top_k=...)`
+  - `bdi.rank_schema_matches(source, target, attributes=..., top_k=10, method=...)`
   - `bdi.match_values(source, target, attribute_matches=..., method=...)`
-  - `bdi.create_harmonization_spec(value_matches)`
+  - `bdi.rank_value_matches(source, target, attribute_matches=..., top_k=10, method=...)`
+  - `bdi.create_harmonization_spec(mappings=[{"source": ..., "target": ..., "mapper": ...}])`
   - `bdi.materialize_mapping(source, harmonization_spec)`
 - How extracted JSON connects to `bdi-kit`:
   - `bdi-kit` operates on `pandas.DataFrame` objects.
@@ -325,10 +342,10 @@ Requirements:
    - `target_collection_to_dataframe(collection_name: str, sample_size: int = 100) -> pd.DataFrame`:
      - Samples documents from `target_db[collection_name]` (excluding `_id` or converting `ObjectId` to str) into a target `pd.DataFrame`. If the target collection is empty, accepts a target column list/schema definition to construct an empty typed `pd.DataFrame`.
    - Wrappers around real `bdikit` primitives:
-     - `run_schema_matching(source_df, target_df, method: str = "ct_learning", top_k: int = 5)`: Calls `bdi.match_schema()` and `bdi.top_matches()` to return recommended column mappings and similarity scores, with safe fallback to string/similarity matching if an LLM key or model weight is unavailable.
+     - `run_schema_matching(source_df, target_df, method: str = "magneto_ft_bp", top_k: int = 5)`: Calls `bdi.match_schema()` and `bdi.rank_schema_matches()` to return recommended column mappings and similarity scores, with safe fallback to string/similarity matching if an LLM key or model weight is unavailable.
      - `run_value_matching(source_df, target_df, attribute_matches, method: str = "tfidf")`: Calls `bdi.match_values()` to propose value-level mappings (`source_value`, `target_value`, `similarity`).
      - `materialize_and_cast(source_df, harmonization_spec: list[dict], type_casts: dict)`:
-       - Calls `bdi.create_harmonization_spec()` / `bdi.materialize_mapping(source_df, harmonization_spec)` to produce the harmonized DataFrame.
+       - Calls `bdi.create_harmonization_spec(harmonization_spec)` / `bdi.materialize_mapping(source_df, harmonization_spec)` to produce the harmonized DataFrame.
        - Applies optional post-harmonization BSON type casting for MongoDB insertion (`string`, `int`, `float` sanitizing currency symbols `$, €, £, ¥` and commas, `iso_date` -> `datetime.datetime`, `boolean`, `object_id` -> `bson.ObjectId`, and `constant` metadata injection).
 
 2. Harmonization Router & Saved Profiles (`backend/app/routers/harmonize.py` & `backend/app/models/harmonization.py`):
@@ -372,7 +389,7 @@ Requirements:
    - Audit `requirements.txt` and `package.json` to ensure no GPL/AGPL packages were introduced.
 
 2. Production Packaging (`backend/Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml`):
-   - `backend/Dockerfile`: Python 3.11 slim image installing `requirements.txt` and running Uvicorn.
+   - `backend/Dockerfile`: Python 3.12 slim image installing `requirements.txt` and running Uvicorn.
    - `frontend/Dockerfile`: Multi-stage Node 20 Alpine build accepting `ARG NEXT_PUBLIC_API_URL=http://localhost:8001/api` at build time.
    - Update `docker-compose.yml` so `backend` uses `APP_MONGODB_URI=mongodb://mongo-app:27017/extraction_app_db` and `TARGET_MONGODB_URI=mongodb://mongo-target:27017/company_enterprise_db`.
 

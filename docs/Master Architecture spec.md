@@ -48,6 +48,8 @@ The final product will be sold with proprietary, closed-source licensing. The ar
 | **`FastAPI` / `Pydantic` / `Uvicorn`** | MIT | **Yes (100% Permissive)** | Retain standard MIT notices. |
 | **`Next.js` / `React` / `Tailwind CSS`** | MIT | **Yes (100% Permissive)** | Retain standard MIT notices. |
 | **`PyMongo` / `Motor`** | Apache 2.0 | **Yes (100% Permissive)** | Retain Apache 2.0 notice. |
+| **`bdi-kit` (`bdikit`)** | Apache 2.0 | **Yes (100% Permissive)** | Retain Apache 2.0 notice & NYU copyright. |
+| **`lift` (`datalab-to/lift`)** | Apache 2.0 (Code) | **Yes (100% Permissive)** | Code is Apache 2.0; use external API endpoints (LiteLLM/OpenAI) to avoid OpenRAIL-M model weights. |
 
 > [!IMPORTANT]
 > **No Viral / Copyleft Contamination:** Neither GPL, AGPL, nor SSPL is used in any application libraries or direct dependencies. All third-party libraries use permissive MIT, BSD, or Apache 2.0 licenses. Proprietary business logic, custom harmonization engines, and UI code remain 100% closed-source and proprietary. A `THIRD_PARTY_LICENSES.md` file is automatically generated to satisfy all attribution requirements.
@@ -81,10 +83,12 @@ graph TD
 ## 4. Complete Project Directory Structure (Monorepo)
 
 ```
-pdf-extraction-studio/
+Hamon/
 ├── .env.example
 ├── .gitignore
 ├── README.md
+├── references.json
+├── package.json
 ├── THIRD_PARTY_LICENSES.md
 ├── docker-compose.yml
 │
@@ -123,7 +127,7 @@ pdf-extraction-studio/
 │   │       ├── types.ts          # Shared TypeScript interfaces
 │   │       └── utils.ts
 │
-├── backend/                      # FastAPI (Python 3.11+)
+├── backend/                      # FastAPI (Python 3.12+)
 │   ├── requirements.txt
 │   ├── pyproject.toml
 │   ├── data/
@@ -143,9 +147,9 @@ pdf-extraction-studio/
 │       │   ├── extract.py        # LiteLLM extraction trigger & SSE status
 │       │   └── harmonize.py      # Target DB discovery, preview, & commit
 │       └── services/
-│           ├── pdf_service.py    # pypdfium2 PDF page-to-image converter
+│           ├── pdf_service.py    # pypdfium2 / lift PDF page-to-image converter
 │           ├── litellm_service.py# LiteLLM multi-image prompt & structured output
-│           └── mapper_service.py # Dynamic JSON transformation & type casting
+│           └── bdi_service.py    # BDI-Kit schema matching & harmonization engine
 ```
 
 ---
@@ -236,19 +240,36 @@ pdf-extraction-studio/
 
 ---
 
-## 6. Extraction & VLM Pipeline Contract
+## 6. Extraction & VLM Pipeline Contract (Lift Preprocessing + LiteLLM Dispatch)
 
-### 6.1 LiteLLM Dispatch Flow
+The platform integrates the open-source engineering primitives of **`lift`** (`datalab-to/lift`) for document preprocessing and schema management, while decoupling entirely from Datalab's proprietary/OpenRAIL-M model weights and heavyweight ML dependencies (`torch`, `transformers`, `accelerate`). All VLM generation is dispatched through **`LiteLLM`** to the user's custom LLM API endpoint.
+
+### 6.1 Lift Utility Integration (Non-Model Primitives)
+- **Document Loading & Preprocessing (`lift.input` & `lift.model.util`)**:
+  - `load_file()` and `load_pdf_images()` with `pypdfium2` for PDF & image loading.
+  - Form field and annotation flattening using `FPDFPage_Flatten`.
+  - Dimension normalization, page range parsing (`"0-5,7,9-12"`), and grid scaling via `scale_to_fit()`.
+  - Mime and file type detection via `filetype`.
+- **Schema Management & Strict Normalization (`lift.schema_builder` & `lift.model.vllm`)**:
+  - Dot-path and bracket parsing (`rows_to_schema`, `schema_to_rows`) for seamless mapping between UI tables and JSON Schema.
+  - Schema validation via `validate_schema()` using `json-schema-to-pydantic`.
+  - Automatic strict schema normalization via `make_properties_nullable()`, ensuring every field type has a nullable union (`[type, "null"]`) compatible with OpenAI / LiteLLM strict structured outputs.
+- **Output Parsing & Repeat Detection (`lift.output` & `lift.model.util`)**:
+  - `load_output()` for resilient JSON parsing.
+  - `detect_repeat_token()` to detect model generation loops and trigger retry logic.
+
+### 6.2 LiteLLM Dispatch Flow
 FastAPI's `litellm_service.py` executes structured extraction as follows:
-1. `pypdfium2` opens the uploaded PDF and renders each page as a high-resolution PNG (200-300 DPI).
-2. Pages are encoded into base64 `data:image/png;base64,...` data URIs.
-3. LiteLLM is called with:
-   - `model`: e.g. `openai/gpt-4o` (or provider equivalent)
+1. `lift.input.load_file` loads the PDF/images, applies annotation flattening and DPI scaling, producing PIL Images.
+2. Images are scaled via `scale_to_fit()` and encoded into base64 `data:image/png;base64,...` data URIs.
+3. The user's JSON schema is validated and transformed via `make_properties_nullable()`.
+4. LiteLLM is called asynchronously (`await litellm.acompletion`):
+   - `model`: `settings.LLM_MODEL` (e.g. `openai/gpt-4o` or custom provider equivalent)
    - `api_base`: `settings.LLM_API_BASE`
    - `api_key`: `settings.LLM_API_KEY`
-   - `messages`: Multi-modal message containing system prompt, instruction, and the array of image URLs representing all document pages.
-   - `response_format`: `{"type": "json_schema", "json_schema": {"name": "document_extraction", "schema": schema_dict, "strict": True}}`
-4. The validated JSON output is parsed, stored in the internal MongoDB job record, and sent to the client via SSE.
+   - `messages`: Multi-modal message containing `lift.prompts.DIRECT_EXTRACTION_PROMPT` and the array of image URLs representing all document pages.
+   - `response_format`: `{"type": "json_schema", "json_schema": {"name": "document_extraction", "schema": strict_schema, "strict": True}}`
+5. The validated JSON output is parsed via `load_output()`, stored in the internal MongoDB job record, and streamed to the client via SSE.
 
 ---
 

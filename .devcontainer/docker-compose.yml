@@ -1,0 +1,20 @@
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ..:/workspace:cached
+    command: sleep infinity
+    environment:
+      - APP_MONGODB_URI=mongodb://mongo-app:27017/extraction_app_db
+      - TARGET_MONGODB_URI=mongodb://mongo-target:27017/company_enterprise_db
+      - BACKEND_PORT=8001
+      - NEXT_PUBLIC_API_URL=http://localhost:8001/api
+    depends_on:
+      mongo-app:
+        condition: service_healthy
+      mongo-target:
+        condition: service_healthy

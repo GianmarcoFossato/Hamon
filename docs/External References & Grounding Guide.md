@@ -23,7 +23,7 @@ flowchart TD
 
 ### Key Principles
 - **No Git Pollution**: `.reference/` is strictly listed in `.gitignore`. External code is never committed to your proprietary Git repository.
-- **Licensing Safety**: All linked repositories (`retab-ui`, `bdi-kit`) are verified under permissive open-source licenses (MIT, Apache-2.0).
+- **Licensing Safety**: All linked repositories (`retab-ui`, `bdi-kit`, `lift`) are verified under permissive open-source licenses (MIT, Apache-2.0). External model weights (e.g. Datalab OpenRAIL-M) are avoided in favor of commercial API endpoints.
 - **100% Grounded**: Gemini inspects the real, exact source code and types rather than guessing or hallucinating implementations.
 
 ---
@@ -74,6 +74,12 @@ You have full control over which repositories and documentation sites Gemini can
       "url": "https://github.com/VIDA-NYU/bdi-kit.git",
       "branch": "devel",
       "description": "NYU VIDA BDI-Kit library for schema matching, value matching, and data harmonization"
+    },
+    {
+      "name": "lift",
+      "url": "https://github.com/datalab-to/lift.git",
+      "branch": "master",
+      "description": "Lift extracts structured JSON from PDFs and images by passing a schema (use api call instead of datalab's model)."
     }
   ],
   "documentation_sites": [
@@ -84,7 +90,24 @@ You have full control over which repositories and documentation sites Gemini can
         "https://bdi-kit.readthedocs.io/stable/quick-start.html",
         "https://bdi-kit.readthedocs.io/stable/how-works.html",
         "https://bdi-kit.readthedocs.io/stable/schema-matching.html",
-        "https://bdi-kit.readthedocs.io/stable/value-matching.html"
+        "https://bdi-kit.readthedocs.io/stable/value-matching.html",
+        "https://bdi-kit.readthedocs.io/stable/installation.html"
+      ]
+    },
+    {
+      "name": "retab-ui-docs",
+      "url": "https://ui.retab.com/docs",
+      "key_pages": [
+        "https://ui.retab.com/docs/components/file-viewer",
+        "https://ui.retab.com/docs/components",
+        "https://ui.retab.com/r/schema-builder.json"
+      ]
+    },
+    {
+      "name": "litellm-docs",
+      "url": "https://docs.litellm.ai/docs/completion/json_mode",
+      "key_pages": [
+        "https://docs.litellm.ai/docs/completion/vision"
       ]
     }
   ]

@@ -1,0 +1,15 @@
+{
+  "name": "hamon-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Unified monorepo for Hamon data extraction and harmonization workbench",
+  "scripts": {
+    "dev": "concurrently -n \"API,WEB\" -c \"blue,green\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload",
+    "dev:frontend": "cd frontend && npm run dev",
+    "test": "cd backend && pytest && cd ../frontend && npm run build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.5"
+  }
+}
