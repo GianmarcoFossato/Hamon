@@ -265,59 +265,133 @@ Verification Checklist:
 
 ### 📋 Antigravity Prompt (Copy & Paste):
 ```text
-Task: Implement the document ingestion & page-rendering pipeline leveraging `lift`'s preprocessing primitives (`lift.input`, `lift.schema_builder`, `lift.model.util`), document serving endpoints, and the async LiteLLM Vision extraction pipeline calling our custom LLM API endpoint.
+Task: Implement the production document ingestion, non-blocking background page-rendering pipeline, OpenAI strict schema normalizer, and async LiteLLM Vision extraction engine with 3-page threshold routing, bounded concurrency, accumulated token tracking, seam-only multi-page merging guided by original Draft-07 schema, and real-time multi-subscriber SSE progress streaming with TTL cache cleanup.
 
-Context:
-- Grounding: Inspect `.reference/repos/lift` (`lift/input.py`, `lift/schema_builder.py`, `lift/model/vllm.py`, `lift/prompts.py`).
-- MODEL INDEPENDENCE: We use `lift` for document ingestion, page range handling, annotation flattening, and schema transformations, but strictly DO NOT load Datalab's model or install heavy ML model dependencies (`torch`, `transformers`, `accelerate`). All generation is dispatched via `LiteLLM` to our custom endpoint configured via `LLM_API_BASE` and `LLM_API_KEY`.
-- OpenAI / LiteLLM Structured Outputs with `"strict": True` reject schemas unless all fields in `properties` are required and nullable. Use `lift.model.vllm.make_properties_nullable` to normalize user schemas.
+Context & Architectural Decisions (Strictly Enforced):
+- GROUNDING & DEPENDENCIES:
+  - Add `lift-pdf>=0.1.2` as an official project dependency in `backend/requirements.txt` and `backend/pyproject.toml` (do not install `lift-pdf[hf]`). Application code resolves standard imports from virtual environment packages, failing fast with `ImportError` if missing.
+  - Reusable primitives:
+    - From `lift.model.util`: `scale_to_fit` (grid/aspect-ratio scaling to max 1088x1408 on 28px patch boundaries to prevent vision token explosions) and `detect_repeat_token` (loop detection).
+    - From `lift.prompts`: `DIRECT_EXTRACTION_PROMPT`.
+    - From `pypdfium2` / `pdfium_c`: `FPDFPage_Flatten` for form/annotation flattening (with `doc.init_forms()` called prior to flattening).
+    - For schema validation: use `jsonschema.Draft7Validator.check_schema(schema)` (avoiding dynamic runtime Pydantic class generation).
+  - Replaced inference layer: Strictly DO NOT use `lift.extract()`, `lift.extract_images()`, or `lift.model.vllm` (they use sync blocking `ThreadPoolExecutor` and hardcoded `localhost:8000/v1` vLLM). All generation is dispatched asynchronously via `await litellm.acompletion` targeting our custom endpoint (`LLM_API_BASE`, `LLM_API_KEY`, `LLM_MODEL`).
+  - Pure LiteLLM & Strict Mode: Pass Draft-07 JSON schemas directly to LiteLLM via OpenAI strict structured outputs (`response_format={"type": "json_schema", "json_schema": {"name": "document_extraction", "schema": strict_schema, "strict": True}}`).
+  - Schema Lifecycle: Save the original user Draft-07 schema in `app_db.jobs` and pass it to the multi-page merger. Normalize to strict structured outputs on-the-fly for the LiteLLM request.
 
 Requirements:
-1. Document Preprocessing Service & Router (`backend/app/services/pdf_service.py` & `backend/app/routers/documents.py`):
-   - Adapt `lift.input.load_file` and `load_pdf_images`:
-     - Load PDFs and images using `pypdfium2` and `Pillow`.
-     - Flatten form annotations via `pdfium_c.FPDFPage_Flatten`.
-     - Support page range parsing (`"0-5,7"`) via `lift.input.parse_range_str`.
-     - Scale dimensions using `lift.model.util.scale_to_fit`.
-   - `save_pdf(file: UploadFile) -> dict`: Saves uploaded file to `{UPLOAD_DIR}/{doc_id}/document.pdf` and inserts metadata into `app_db.documents`.
-   - `render_pages_to_images(doc_id: str, page_range: Optional[str] = None) -> list[str]`: Saves rendered page PNGs to `{UPLOAD_DIR}/{doc_id}/page_{i}.png`.
-   - `encode_images_base64(image_paths: list[str]) -> list[str]`: Encodes PNGs to `data:image/png;base64,...` data URIs.
-   - Implement `backend/app/routers/documents.py`:
-     - `POST /api/documents/upload`: Uploads a PDF/image and returns `{document_id, filename, page_count}`.
-     - `GET /api/documents/{doc_id}/file`: Streams the raw file (`FileResponse`) for the frontend viewer.
-     - `GET /api/documents/{doc_id}/pages/{page_number}`: Serves rendered PNG for a specific page.
 
-2. LiteLLM Extraction Service (`backend/app/services/litellm_service.py`):
-   - Use `lift.schema_builder.validate_schema` to validate user JSON schema.
-   - Use `lift.model.vllm.make_properties_nullable` to format schema for strict structured outputs.
-   - Implement `extract_from_images(base64_images: list[str], json_schema: dict) -> dict` using `await litellm.acompletion`:
-     ```python
-     response = await litellm.acompletion(
-         model=settings.LLM_MODEL,
-         api_base=settings.LLM_API_BASE,
-         api_key=settings.LLM_API_KEY,
-         messages=messages,
-         response_format={
-             "type": "json_schema",
-             "json_schema": {
-                 "name": "document_extraction",
-                 "schema": strict_schema,
-                 "strict": True
-             }
-         },
-         temperature=0.0
-     )
-     ```
-   - Use `lift.output.load_output` for parsing and `lift.model.util.detect_repeat_token` to detect repeating generation loops and retry.
+1. Database & Request Models (`backend/app/models/document.py` & `backend/app/models/job.py`):
+   - Uniform ObjectId Primary Keys: Use standard 24-character hexadecimal `ObjectId` strings for all `id` fields (`default_factory=lambda: str(ObjectId())`), matching Phase 2 schemas.
+   - Document Models (`app_db.documents`):
+     - `DocumentMetadata`: `id` (24-char hex ObjectId), `filename` (str), `content_type` (str), `file_size` (int), `file_path` (str), `page_count` (int), `rendered_pages` (list[int]), `render_status` (`"pending"` | `"rendering"` | `"completed"` | `"failed"`), `error_message` (Optional[str]), `created_at` (datetime), `updated_at` (datetime).
+     - `DocumentResponse`: API response schema with `id` mapped from `_id`/`id`.
+   - Extraction Job Models (`app_db.jobs`):
+     - `ExtractStartRequest`: `document_id` (24-char hex ObjectId), `schema_id` (Optional[str]), `json_schema` (Optional[dict]), `page_range` (Optional[str], 0-indexed e.g. "0-2,5").
+     - `TokenUsage`: `prompt_tokens` (int), `completion_tokens` (int), `total_tokens` (int).
+     - `ExtractionJob`: `id` (24-char hex ObjectId), `document_id` (str), `schema_id` (Optional[str]), `schema_name` (Optional[str]), `json_schema` (dict, original user schema), `page_range` (Optional[str]), `status` (`"pending"` | `"waiting_for_render"` | `"extracting"` | `"merging"` | `"completed"` | `"partial_success"` | `"failed"`), `failed_pages` (list[int]), `progress` (float 0.0-1.0), `raw_extraction` (Optional[dict]), `error_message` (Optional[str]), `model_used` (str), `token_usage` (TokenUsage), `duration_seconds` (Optional[float]), `created_at` (datetime), `completed_at` (Optional[datetime]), `harmonized` (bool = False), `harmonized_target_collection` (Optional[str] = None).
+     - `ExtractionJobResponse`: API response schema.
 
-3. Async Extraction Job & SSE Router (`backend/app/routers/extract.py`):
-   - `POST /api/extract/start`: Accepts `document_id` and `schema_id` (or inline `json_schema`). Creates job record in `app_db.jobs` (`status="pending"`) and launches async background task (`queued` -> `rendering_pages` -> `calling_vlm` -> `completed` / `failed`).
-   - `GET /api/extract/jobs`: Lists all extraction jobs for the History view.
-   - `GET /api/extract/status/{job_id}`: Returns full job document including `raw_extraction`.
-   - `GET /api/extract/stream/{job_id}`: Streams real-time SSE status updates.
+2. Document Ingestion, Background Rendering & Serving (`backend/app/services/pdf_service.py` & `backend/app/routers/documents.py`):
+   - Guardrails: Max file size 50 MB (stream-checked in 1MB chunks to prevent memory bloat; abort with HTTP 413 if exceeded), allowed MIME types (`application/pdf`, `image/png`, `image/jpeg`, `image/webp`, `image/tiff` verified via `filetype.guess`), max 20 pages per document. Reject invalid inputs with HTTP 400.
+   - Path Traversal Guard: Verify `os.path.commonpath([resolved_path, upload_dir_abs]) == upload_dir_abs` and validate ObjectId format on file serving.
+   - Non-Blocking Incremental Background Rendering (Async Orchestrator):
+     - Saves uploaded file to `{UPLOAD_DIR}/{doc_id}/document.{ext}`.
+     - For PDFs, counts pages using `pypdfium2.PdfDocument(filepath)`; for images, `page_count = 1`.
+     - Inserts record into `app_db.documents` (`_id=ObjectId(doc_id)`, `render_status="rendering"`, `rendered_pages=[]`).
+     - Returns `201 Created` immediately with document metadata.
+     - Background async orchestrator worker:
+       - For images: opens with Pillow, converts to RGB, saves atomically to `{UPLOAD_DIR}/{doc_id}/page_0.png`.
+       - For PDFs: iterates page by page; delegates CPU/disk rendering of each page to `await asyncio.to_thread(_render_page_to_disk_sync, filepath, i, out_path)`:
+         - Calls `doc.init_forms()` before flattening to preserve interactive form data.
+         - Calls `pdfium_c.FPDFPage_Flatten(page, pdfium_c.FLAT_NORMALDISPLAY)`, re-retrieves page handle, renders at 150 DPI.
+         - Writes to `{UPLOAD_DIR}/{doc_id}/page_{i}.png.tmp` and atomically renames to `page_{i}.png` via `os.replace`.
+       - Updates `app_db.documents` on the main loop via `await col.update_one(...)` pushing `i` into `rendered_pages`.
+       - Signals in-memory page event notifier (`page_render_notifier.notify(doc_id, i)`).
+       - Sets `render_status="completed"` on success, or `render_status="failed"` on error.
+   - Page Synchronization Barrier (`ensure_pages_rendered(doc_id, required_pages, timeout=45.0)`):
+     - Validates page bounds ($0 \le p < \text{page\_count}$).
+     - Checks disk; if still rendering, awaits in-memory page notifier events (with 100ms polling fallback).
+     - Fails fast immediately if `render_status == "failed"`.
+   - Endpoints in `backend/app/routers/documents.py`:
+     - `POST /api/documents/upload`: Uploads document, starts background rendering, returns metadata immediately.
+     - `GET /api/documents/{doc_id}/file`: Streams original file via `FileResponse`.
+     - `GET /api/documents/{doc_id}/pages/{page_number}`: Ensures `page_number` is rendered via `ensure_pages_rendered`, then serves PNG via `FileResponse`.
+     - `GET /api/documents/{doc_id}`: Returns document metadata and rendering status.
+
+3. Strict Schema Normalizer & LiteLLM Extraction Service (`backend/app/services/litellm_service.py`):
+   - `normalize_schema_for_strict_mode(schema: dict) -> dict`:
+     - Validates Draft-07 specification via `jsonschema.Draft7Validator.check_schema`.
+     - Deepcopies schema before modification to avoid in-place mutation.
+     - Strict Constraint Check: Recursively inspects schema for strict-incompatible constraints (`pattern`, `minimum`, `maximum`, `minLength`, `maxLength`, `minItems`, `maxItems`, `uniqueItems`, `multipleOf`). If found, raises HTTP 400.
+     - Unpacks existing type arrays (e.g. `type: ["string", "null"]`) into scalar `type: "string"` before wrapping into `anyOf`.
+     - Strips metadata keywords (`$schema`, `default`, `title`, `id`, `$id`).
+     - Preserves `"format"` by appending a hint to property `"description"`, then strips `"format"`.
+     - Recursive Strict Transformation:
+       - Every `object` node: sets `"additionalProperties": False`, sets `"required": sorted(list(properties.keys()))`.
+       - Every property: wrapped in nullable union `{"anyOf": [original_type, {"type": "null"}]}`.
+   - Vision Payload Assembly:
+     - Applies `lift.model.util.scale_to_fit(img, max_size=(1088, 1408), grid_size=28)` before base64 encoding on-demand.
+   - Prompting & Semantic Inference for Implicit Keys:
+     - Directs VLM to use schema field `description` annotations to semantically map implicit table columns or double-entry fields (Debits/Credits, Assets/Liabilities).
+     - Returns `null` for absent scalars and `[]` for absent lists.
+   - 3-Page Threshold Concurrency Engine:
+     - If `len(pages) <= 3`:
+       - Single multi-modal LiteLLM call with all pages attached. Returns complete extracted object directly (no multi-page merger step).
+       - Temperature: `0.0`. Loop detection (`detect_repeat_token`) and `json.JSONDecodeError` trigger retry with `temperature=0.3`.
+       - If call fails after all retries, all requested pages are added to `failed_pages` and status is set to `"failed"`.
+     - If `len(pages) > 3`:
+       - Throttled per-page concurrent execution using `asyncio.Semaphore(5)`.
+       - Up to 3 retries with exponential backoff on 429 or transient timeouts.
+       - Each page prompt instructs: *"You are analyzing Page {i+1} of {total_pages}. Extract ONLY fields visible on this page. Return null for fields not present and [] for empty lists."*
+       - Loop detection and JSON decode errors trigger retry with `temperature=0.3`.
+       - Accumulates `token_usage` (`prompt_tokens`, `completion_tokens`, `total_tokens`) across all page responses (handling null usage objects safely).
+     - Resilient Partial Aggregation:
+       - If a single page fails after all retries, logs error and records page in `failed_pages`.
+       - If `0 < len(failed_pages) < total_pages`, sets job status to `"partial_success"` with extracted data from successful pages.
+       - If `len(failed_pages) == total_pages`, sets job status to `"failed"`.
+   - Null-Safe Deterministic Schema-Guided JSON Merger (`merge_page_extractions(page_results: list[dict], schema: dict) -> dict`):
+     - Uses original user Draft-07 schema for property type resolution plus runtime `isinstance` checks.
+     - Arrays (e.g. `line_items`): null-coalesced (`p.get(key) if isinstance(...) else []`), concatenated in ascending page order.
+     - Seam-Only Deduplication: Deduplicates identical items ONLY across page boundaries (comparing last item of page $k$ with first item of page $k+1$), preserving legitimate identical rows on the same page.
+     - Scalars: takes first valid non-null, non-empty, non-container value (`val is not None and val != "" and not isinstance(val, (list, dict))`), strictly preserving `0`, `0.0`, and `False`.
+     - Nested Objects: recursively merged with null-coalescing.
+
+4. Extraction Job Management & Real-Time SSE Stream (`backend/app/routers/extract.py`):
+   - Multi-Subscriber Event Broker (`JobEventBroker`):
+     - Maintains isolated `asyncio.Queue` sets per job ID (`_subscribers: dict[str, set[asyncio.Queue]]`).
+     - Iterates over `list(self._subscribers.get(job_id, set()))` in `publish` to prevent `RuntimeError: Set changed size during iteration`.
+     - Caches latest event snapshot with an automated LRU / 10-minute TTL cleanup mechanism to prevent memory leaks while supporting client reconnects.
+   - `POST /api/extract/start`:
+     - Accepts `ExtractStartRequest` (`document_id`, `schema_id`, `json_schema`, `page_range`).
+     - Validates `document_id` exists in `app_db.documents`.
+     - Strict Page Range Validation: defaults None/empty to all pages `list(range(doc.page_count))`; strictly validates syntax and bounds ($0 \le p < \text{doc.page\_count}$), raising HTTP 400 on error.
+     - If `schema_id` is supplied, fetches schema from `app_db.schemas` via `parse_object_id(schema_id)` (raises 404 if missing).
+     - Validates schema, rejects unsupported constraints (`pattern`, `minimum`, etc.) with HTTP 400.
+     - Creates job in `app_db.jobs` (`_id=ObjectId(job_id)`, `status="pending"`, storing original schema).
+     - Spawns background extraction task held in module-level `_background_tasks: set[asyncio.Task]` with done callback to avoid GC.
+     - Returns `200 OK` `{job_id, status: "pending"}`.
+   - Background Extraction Worker Lifecycle:
+     - Emits granular events via `JobEventBroker.publish` and updates `app_db.jobs`:
+       1. `waiting_for_render`: ensures required page images are rendered.
+       2. `extracting`: emits `{"status": "extracting", "completed_pages": y, "total_pages": n, "progress": float}`.
+       3. `merging`: emits `{"status": "merging"}`.
+       4. `completed` / `partial_success`: emits final `raw_extraction`, token usage, execution time.
+       5. `failed`: emits sanitized client-friendly error message.
+   - `GET /api/extract/stream/{job_id}`:
+     - Validates `job_id` exists in `app_db.jobs` (raises 404 if not found).
+     - If job is already terminal in DB, immediately emits terminal event and closes.
+     - Otherwise subscribes to `JobEventBroker`, emits latest state snapshot, streams SSE events (`sse-starlette.EventSourceResponse`), handling disconnect cleanly in `finally`.
+   - `GET /api/extract/status/{job_id}`: Resilient DB fallback polling endpoint returning complete job state from MongoDB.
+   - `GET /api/extract/jobs`: Returns sorted list of extraction jobs for History view (`created_at` desc).
 
 Verification:
-- Write and run a test that uploads a sample PDF to `POST /api/documents/upload`, verifies `load_file` and page flattening, and verifies strict schema normalization.
+- Run automated unit and integration tests:
+  1. `test_strict_schema_normalizer`: Verifies deepcopy isolation, type array unpacking (`type: [t, "null"]` -> `t`), `$schema` stripping, `additionalProperties: False`, `required: all`, universal `anyOf` nullability, `format` description preservation, and strict HTTP 400 rejection of schemas with `pattern`/`minimum`.
+  2. `test_pdf_service`: Tests chunked 50MB upload guardrail, path traversal protection, async background orchestrator with `doc.init_forms()` and `FPDFPage_Flatten`, atomic file write, `ensure_pages_rendered` in-memory event notifier, and image serving endpoint.
+  3. `test_json_merger`: Verifies original-schema property type resolution, seam-only array deduplication, scalar priority preserving 0/False while ignoring empty containers, recursive object merging, and partial page failure handling.
+  4. `test_litellm_service`: Tests mocked LiteLLM extraction for <= 3 pages single call (direct return without merge) and > 3 pages parallel semaphore execution with token accumulation and loop retry.
+  5. `test_extract_router`: Tests job creation with ObjectId primary keys, `schema_id` lookup via `ObjectId`, page range syntax/bounds validation (HTTP 400), `JobEventBroker` safe iteration and 10-minute TTL cleanup, SSE stream, status fallback, and job listing.
 ```
 
 ---
