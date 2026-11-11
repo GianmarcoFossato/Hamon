@@ -42,6 +42,12 @@ source .venv/bin/activate
 pip install uv
 uv pip install -r backend/requirements.txt
 
+# Note for macOS Intel (x86_64) users:
+# PyTorch discontinued pre-built wheels for macOS x86_64 in PyTorch 2.3+.
+# backend/requirements.txt automatically skips bdi-kit on macOS Intel hosts so your
+# local FastAPI, LiteLLM, and Lift extraction services install seamlessly.
+# To run full BDI-Kit ML matching on Intel hardware, open in Dev Containers (Docker).
+
 # Install frontend dependencies
 npm install
 cd frontend && npm install && cd ..
