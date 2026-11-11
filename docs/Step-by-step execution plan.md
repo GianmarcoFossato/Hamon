@@ -134,7 +134,7 @@ Task: Scaffold the Dev Container environment, FastAPI backend (`backend/`), Next
 Context:
 - Before starting, verify that `.reference/INDEX.md` is populated (run `python3 scripts/sync_references.py` if missing).
 - Note that `motor` is deprecated; use PyMongo's native `AsyncMongoClient` (`from pymongo import AsyncMongoClient`).
-- Backend runs on port 8001 (`BACKEND_PORT=8001`), NOT 8000.
+- Backend runs on port 8001 (`BACKEND_PORT=8001`).
 - Frontend uses Next.js 14 LTS (React 18) for maximum peer-dependency stability with `@retab/schema-builder` and shadcn/ui.
 - Backend lifespan must be resilient: if MongoDB is still booting, the server starts cleanly and `/api/health` indicates individual DB reachability without crashing.
 
