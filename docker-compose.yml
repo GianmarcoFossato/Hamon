@@ -1,0 +1,34 @@
+services:
+  mongo-app:
+    image: mongo:7
+    container_name: hamon-mongo-app
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_app_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  mongo-target:
+    image: mongo:7
+    container_name: hamon-mongo-target
+    restart: unless-stopped
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo_target_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  mongo_app_data:
+  mongo_target_data:
