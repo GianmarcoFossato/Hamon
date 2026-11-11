@@ -13,6 +13,7 @@ import {
   Server,
 } from "lucide-react";
 import { fetchHealth, HealthResponse, API_BASE_URL } from "@/lib/api-client";
+import { SchemaEditorPanel } from "@/components/retab/schema-editor-panel";
 
 export default function Home() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
@@ -75,7 +76,7 @@ export default function Home() {
               <RefreshCw
                 className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`}
               />
-              <span>Refresh</span>
+              <span>Check Status</span>
             </button>
           </div>
         </div>
@@ -84,130 +85,103 @@ export default function Home() {
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Status Banner */}
-        <section className="bg-white dark:bg-slate-900 rounded-xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4 mb-6">
+        <section className="bg-white dark:bg-slate-900 rounded-xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
             <div>
-              <h2 className="text-xl font-semibold flex items-center gap-2">
-                <Activity className="w-5 h-5 text-indigo-500" />
-                System Connectivity & Environment Status
+              <h2 className="text-sm font-semibold flex items-center gap-2 text-slate-800 dark:text-slate-200">
+                <Activity className="w-4 h-4 text-indigo-500" />
+                System Environment & Infrastructure
               </h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                Verifying reachability of FastAPI backend and MongoDB containers
-              </p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400">
+              <span className="text-[11px] text-slate-400">
                 {lastChecked
-                  ? `Checked at ${lastChecked.toLocaleTimeString()}`
-                  : "Checking..."}
+                  ? `Last verified at ${lastChecked.toLocaleTimeString()}`
+                  : "Checking connectivity..."}
               </span>
             </div>
           </div>
 
           {/* Service Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {/* Backend API Card */}
-            <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex flex-col justify-between">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-md bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400">
-                    <Server className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold">FastAPI Backend</h3>
-                    <p className="text-xs text-slate-500">Port 8001</p>
-                  </div>
+            <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-md bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400">
+                  <Server className="w-4 h-4" />
                 </div>
-                {loading ? (
-                  <RefreshCw className="w-4 h-4 text-slate-400 animate-spin" />
-                ) : isBackendHealthy ? (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                    <CheckCircle2 className="w-3 h-3" /> Online
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
-                    <AlertCircle className="w-3 h-3" /> Offline
-                  </span>
-                )}
+                <div>
+                  <h3 className="text-xs font-semibold">FastAPI Backend</h3>
+                  <p className="text-[11px] text-slate-500">Port 8001</p>
+                </div>
               </div>
-              <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700/60 text-xs text-slate-500">
-                Endpoint:{" "}
-                <code className="text-slate-700 dark:text-slate-300">
-                  /api/health
-                </code>
-              </div>
+              {loading ? (
+                <RefreshCw className="w-3.5 h-3.5 text-slate-400 animate-spin" />
+              ) : isBackendHealthy ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                  <CheckCircle2 className="w-3 h-3" /> Online
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
+                  <AlertCircle className="w-3 h-3" /> Offline
+                </span>
+              )}
             </div>
 
             {/* App MongoDB Card */}
-            <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex flex-col justify-between">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-md bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
-                    <Database className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold">mongo-app</h3>
-                    <p className="text-xs text-slate-500">Port 27017 (app_db)</p>
-                  </div>
+            <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-md bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
+                  <Database className="w-4 h-4" />
                 </div>
-                {loading ? (
-                  <RefreshCw className="w-4 h-4 text-slate-400 animate-spin" />
-                ) : isAppDbHealthy ? (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                    <CheckCircle2 className="w-3 h-3" /> Connected
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800">
-                    <AlertCircle className="w-3 h-3" /> Disconnected
-                  </span>
-                )}
+                <div>
+                  <h3 className="text-xs font-semibold">App MongoDB (27017)</h3>
+                  <p className="text-[11px] text-slate-500">extraction_app_db</p>
+                </div>
               </div>
-              <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700/60 text-xs text-slate-500">
-                DB:{" "}
-                <code className="text-slate-700 dark:text-slate-300">
-                  extraction_app_db
-                </code>
-              </div>
+              {loading ? (
+                <RefreshCw className="w-3.5 h-3.5 text-slate-400 animate-spin" />
+              ) : isAppDbHealthy ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                  <CheckCircle2 className="w-3 h-3" /> Connected
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800">
+                  <AlertCircle className="w-3 h-3" /> Offline
+                </span>
+              )}
             </div>
 
             {/* Target MongoDB Card */}
-            <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex flex-col justify-between">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-md bg-cyan-50 dark:bg-cyan-950/50 text-cyan-600 dark:text-cyan-400">
-                    <Database className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold">mongo-target</h3>
-                    <p className="text-xs text-slate-500">Port 27018 (target_db)</p>
-                  </div>
+            <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-md bg-cyan-50 dark:bg-cyan-950/50 text-cyan-600 dark:text-cyan-400">
+                  <Database className="w-4 h-4" />
                 </div>
-                {loading ? (
-                  <RefreshCw className="w-4 h-4 text-slate-400 animate-spin" />
-                ) : isTargetDbHealthy ? (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                    <CheckCircle2 className="w-3 h-3" /> Connected
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800">
-                    <AlertCircle className="w-3 h-3" /> Disconnected
-                  </span>
-                )}
+                <div>
+                  <h3 className="text-xs font-semibold">Target MongoDB (27018)</h3>
+                  <p className="text-[11px] text-slate-500">company_enterprise_db</p>
+                </div>
               </div>
-              <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700/60 text-xs text-slate-500">
-                DB:{" "}
-                <code className="text-slate-700 dark:text-slate-300">
-                  company_enterprise_db
-                </code>
-              </div>
+              {loading ? (
+                <RefreshCw className="w-3.5 h-3.5 text-slate-400 animate-spin" />
+              ) : isTargetDbHealthy ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                  <CheckCircle2 className="w-3 h-3" /> Connected
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800">
+                  <AlertCircle className="w-3 h-3" /> Offline
+                </span>
+              )}
             </div>
           </div>
 
           {error && (
-            <div className="mt-4 p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-lg text-xs text-rose-700 dark:text-rose-300 flex items-center gap-2">
+            <div className="mt-3 p-2.5 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-lg text-xs text-rose-700 dark:text-rose-300 flex items-center gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               <span>
-                Backend connection warning: {error}. Start the backend via{" "}
+                Backend is currently unreachable ({error}). Start the backend via{" "}
                 <code className="font-mono bg-rose-100 dark:bg-rose-900 px-1 py-0.5 rounded">
                   npm run dev:backend
                 </code>
@@ -217,66 +191,81 @@ export default function Home() {
           )}
         </section>
 
-        {/* Workbench Modules Overview */}
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold tracking-tight">
-            Workbench Pipeline Modules
+        {/* Phase 2: Schema Editor Workbench Section */}
+        <section className="space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Layers className="w-5 h-5 text-indigo-500" />
+                Extraction Schema Builder & Template Manager
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Interactive Draft-07 schema workbench powered by official @retab/schema-builder. Build, edit, and persist schemas directly to MongoDB.
+              </p>
+            </div>
+          </div>
+
+          {/* Mounted Schema Editor Panel */}
+          <SchemaEditorPanel />
+        </section>
+
+        {/* Pipeline Architecture Reference */}
+        <section className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 tracking-tight">
+            Workbench Pipeline Architecture
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="p-5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
               <div>
-                <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-3">
-                  <FileText className="w-5 h-5" />
+                <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-2.5">
+                  <FileText className="w-4 h-4" />
                 </div>
-                <h3 className="font-semibold text-base mb-1">
+                <h3 className="font-semibold text-sm mb-1">
                   1. Document Ingestion
                 </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Ingest PDFs and images, extract layout segments, and render
-                  using pypdfium2 and visual schema extractors.
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Ingest multi-page PDFs and images, flatten form fields, and render high-resolution raster images with pypdfium2.
                 </p>
               </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center text-xs font-medium text-indigo-600 dark:text-indigo-400">
-                <span>Ingestion Ready</span>
-                <ArrowRight className="w-3.5 h-3.5 ml-1" />
+              <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center text-xs font-medium text-slate-400">
+                <span>Phase 3</span>
+                <ArrowRight className="w-3 h-3 ml-1" />
               </div>
             </div>
 
-            <div className="p-5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+            <div className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
               <div>
-                <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3">
-                  <Layers className="w-5 h-5" />
+                <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-2.5">
+                  <Layers className="w-4 h-4" />
                 </div>
-                <h3 className="font-semibold text-base mb-1">
-                  2. Schema Mapping
+                <h3 className="font-semibold text-sm mb-1">
+                  2. Schema Definition (Active)
                 </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Interactive schema definition powered by @retab/schema-builder
-                  and automated matching with bdi-kit.
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Controlled JSON Schema authoring with @retab/schema-builder and FastAPI CRUD API with Draft-07 validator.
                 </p>
               </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center text-xs font-medium text-indigo-600 dark:text-indigo-400">
-                <span>Registry Configured</span>
-                <ArrowRight className="w-3.5 h-3.5 ml-1" />
+              <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                <span>Phase 2 Operational</span>
+                <CheckCircle2 className="w-3 h-3 ml-1" />
               </div>
             </div>
 
-            <div className="p-5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+            <div className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
               <div>
-                <div className="w-10 h-10 rounded-lg bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center mb-3">
-                  <Database className="w-5 h-5" />
+                <div className="w-8 h-8 rounded-lg bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center mb-2.5">
+                  <Database className="w-4 h-4" />
                 </div>
-                <h3 className="font-semibold text-base mb-1">
+                <h3 className="font-semibold text-sm mb-1">
                   3. Harmonization
                 </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Transform, normalize, and validate target schemas into the
-                  enterprise MongoDB database instance.
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Align and map extracted structures into enterprise destination schemas using BDI-Kit machine learning matchers.
                 </p>
               </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center text-xs font-medium text-indigo-600 dark:text-indigo-400">
-                <span>Dual DB Wired</span>
-                <ArrowRight className="w-3.5 h-3.5 ml-1" />
+              <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center text-xs font-medium text-slate-400">
+                <span>Phase 4</span>
+                <ArrowRight className="w-3 h-3 ml-1" />
               </div>
             </div>
           </div>

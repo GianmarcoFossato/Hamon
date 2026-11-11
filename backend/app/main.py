@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import close_databases, init_databases, ping_databases
+from app.routers import schemas
 
 settings = get_settings()
 
@@ -36,6 +37,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Include application routers
+app.include_router(schemas.router)
 
 
 @app.get("/api/health")

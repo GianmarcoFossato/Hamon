@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import logging
 from typing import Optional
 from pymongo import AsyncMongoClient
@@ -43,18 +44,138 @@ def get_target_client() -> AsyncMongoClient:
     return target_client
 
 
-# Pre-initialize clients
-try:
-    app_client = get_app_client()
-    app_db = app_client.get_default_database()
-except Exception as exc:
-    logger.warning("Initial app_client setup warning: %s", exc)
+# Lazy initialization happens via get_app_client() and get_target_client()
+# on the active event loop during lifespan / request processing.
 
-try:
-    target_client = get_target_client()
-    target_db = target_client.get_default_database()
-except Exception as exc:
-    logger.warning("Initial target_client setup warning: %s", exc)
+
+def get_schemas_collection():
+    """Dependency provider for schemas collection in app_db."""
+    client = app_client or get_app_client()
+    try:
+        db = app_db if app_db is not None else client.get_default_database()
+    except Exception:
+        db = client["extraction_app_db"]
+    return db["schemas"]
+
+
+DEFAULT_SCHEMA_TEMPLATES = [
+    {
+        "name": "Commercial Invoice",
+        "description": "Extracts line items, totals, tax IDs, and dates",
+        "json_schema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+                "invoice_number": {
+                    "type": "string",
+                    "description": "Invoice reference ID",
+                },
+                "invoice_date": {
+                    "type": "string",
+                    "description": "Date of issue (YYYY-MM-DD)",
+                },
+                "vendor_name": {"type": "string"},
+                "total_amount": {"type": "number"},
+                "currency": {"type": "string"},
+                "line_items": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "description": {"type": "string"},
+                            "quantity": {"type": "number"},
+                            "unit_price": {"type": "number"},
+                            "amount": {"type": "number"},
+                        },
+                        "required": ["description", "amount"],
+                    },
+                },
+            },
+            "required": ["invoice_number", "total_amount"],
+        },
+    },
+    {
+        "name": "Clinical / Lab Report",
+        "description": "Extracts patient info, ordering physician, and lab test results",
+        "json_schema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+                "patient_name": {
+                    "type": "string",
+                    "description": "Full name of the patient",
+                },
+                "patient_id": {
+                    "type": "string",
+                    "description": "Medical record or patient identifier",
+                },
+                "specimen_collection_date": {
+                    "type": "string",
+                    "description": "Date and time of specimen collection",
+                },
+                "ordering_physician": {
+                    "type": "string",
+                    "description": "Name of ordering doctor or clinic",
+                },
+                "test_results": {
+                    "type": "array",
+                    "description": "List of laboratory test results and diagnostic markers",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "test_name": {
+                                "type": "string",
+                                "description": "Name of the test or panel marker",
+                            },
+                            "result_value": {
+                                "type": "string",
+                                "description": "Observed test measurement or finding",
+                            },
+                            "units": {
+                                "type": "string",
+                                "description": "Measurement units (e.g. mg/dL, mmol/L)",
+                            },
+                            "reference_range": {
+                                "type": "string",
+                                "description": "Normal or expected reference interval",
+                            },
+                            "flag": {
+                                "type": "string",
+                                "description": "Abnormal flag indicator (e.g. Normal, High, Low, Critical)",
+                            },
+                        },
+                        "required": ["test_name", "result_value"],
+                    },
+                },
+            },
+            "required": ["patient_name", "test_results"],
+        },
+    },
+]
+
+
+async def seed_default_schemas(col=None) -> None:
+    """Seed initial schema templates if schemas collection is empty."""
+    try:
+        if col is None:
+            col = get_schemas_collection()
+        count = await col.count_documents({})
+        if count == 0:
+            now = datetime.now(timezone.utc)
+            templates = [
+                {
+                    **template,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+                for template in DEFAULT_SCHEMA_TEMPLATES
+            ]
+            await col.insert_many(templates)
+            logger.info("Successfully seeded default schema templates.")
+    except Exception as exc:
+        logger.warning(
+            "Could not seed default schemas (MongoDB may be offline): %s", exc
+        )
 
 
 async def ping_databases() -> dict[str, bool]:
@@ -84,6 +205,7 @@ async def init_databases() -> None:
         status = await ping_databases()
         if status.get("app_db"):
             logger.info("Connected to app_db successfully.")
+            await seed_default_schemas()
         else:
             logger.warning("app_db is currently unreachable (server starting cleanly).")
 

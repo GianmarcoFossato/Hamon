@@ -1,0 +1,222 @@
+import type * as React from "react";
+
+export interface SchemaRowDragItem {
+  id: string;
+  label: string;
+}
+
+export type SchemaRowDropPlacement = "before" | "after";
+export type SchemaRowDropIndicator = SchemaRowDropPlacement | null;
+
+interface SchemaRowDropTargetRect {
+  height: number;
+  top: number;
+}
+
+const ROW_DRAG_FORMAT = "text/plain";
+const DROP_CLASSES = [
+  "border-t-2",
+  "border-b-2",
+  "border-grey-700",
+  "border-dashed",
+] as const;
+
+export function getSchemaRowDropPlacement({
+  clientY,
+  targetRect,
+}: {
+  clientY: number;
+  targetRect: SchemaRowDropTargetRect;
+}): SchemaRowDropPlacement {
+  return clientY < targetRect.top + targetRect.height / 2 ? "before" : "after";
+}
+
+export function getSchemaRowDropClasses(
+  indicator: SchemaRowDropIndicator,
+): string[] {
+  if (!indicator) return [];
+  return [
+    indicator === "before" ? "border-t-2" : "border-b-2",
+    "border-grey-700",
+    "border-dashed",
+  ];
+}
+
+export function clearSchemaRowDropClasses(element: HTMLElement) {
+  element.classList.remove(...DROP_CLASSES);
+}
+
+export function applySchemaRowDropClasses(
+  element: HTMLElement,
+  indicator: SchemaRowDropIndicator,
+) {
+  // Native dragover fires continuously; keep the drop indicator out of React state.
+  clearSchemaRowDropClasses(element);
+  const classes = getSchemaRowDropClasses(indicator);
+  if (classes.length) element.classList.add(...classes);
+}
+
+export function getSchemaRowDropTargetIndex({
+  placement,
+  rowIds,
+  sourceRowId,
+  targetRowId,
+}: {
+  placement: SchemaRowDropPlacement;
+  rowIds: string[];
+  sourceRowId: string;
+  targetRowId: string;
+}) {
+  const sourceIndex = rowIds.indexOf(sourceRowId);
+  if (sourceIndex < 0 || sourceRowId === targetRowId) return -1;
+
+  const remainingRowIds = rowIds.filter((rowId) => rowId !== sourceRowId);
+  const targetIndex = remainingRowIds.indexOf(targetRowId);
+  if (targetIndex < 0) return -1;
+
+  return placement === "after" ? targetIndex + 1 : targetIndex;
+}
+
+export function beginSchemaRowDrag({
+  event,
+  item,
+  draggedRowIdRef,
+}: {
+  event: React.DragEvent<HTMLElement>;
+  item: SchemaRowDragItem;
+  draggedRowIdRef: { current: string | null };
+}) {
+  event.stopPropagation();
+  event.dataTransfer.setData(ROW_DRAG_FORMAT, item.id);
+  event.dataTransfer.effectAllowed = "move";
+  draggedRowIdRef.current = item.id;
+
+  const dragElement = createSchemaRowDragPreview({
+    sourceElement: event.currentTarget,
+    label: item.label,
+  });
+  event.dataTransfer.setDragImage(dragElement, 10, 10);
+  removeSchemaRowDragPreviewAfterFrame(dragElement);
+}
+
+export function updateSchemaRowDragTarget({
+  event,
+  rowIds,
+  targetRowId,
+  draggedRowIdRef,
+}: {
+  event: React.DragEvent<HTMLElement>;
+  rowIds: string[];
+  targetRowId: string;
+  draggedRowIdRef: { current: string | null };
+}) {
+  event.preventDefault();
+  const indicator =
+    draggedRowIdRef.current &&
+    draggedRowIdRef.current !== targetRowId &&
+    rowIds.includes(draggedRowIdRef.current) &&
+    rowIds.includes(targetRowId)
+      ? getSchemaRowDropPlacement({
+          clientY: event.clientY,
+          targetRect: event.currentTarget.getBoundingClientRect(),
+        })
+      : null;
+
+  event.dataTransfer.dropEffect = "move";
+  applySchemaRowDropClasses(event.currentTarget, indicator);
+}
+
+export function leaveSchemaRowDragTarget(
+  event: Pick<
+    React.DragEvent<HTMLElement>,
+    "currentTarget" | "stopPropagation"
+  >,
+) {
+  event.stopPropagation();
+  clearSchemaRowDropClasses(event.currentTarget);
+}
+
+export function resolveSchemaRowDrop({
+  event,
+  rowIds,
+  targetRowId,
+  draggedRowIdRef,
+}: {
+  event: React.DragEvent<HTMLElement>;
+  rowIds: string[];
+  targetRowId: string;
+  draggedRowIdRef: { current: string | null };
+}): {
+  placement: SchemaRowDropPlacement;
+  sourceRowId: string;
+  targetRowId: string;
+  targetIndex: number;
+} | null {
+  event.stopPropagation();
+  event.preventDefault();
+  const sourceRowId = event.dataTransfer.getData(ROW_DRAG_FORMAT);
+  clearSchemaRowDropClasses(event.currentTarget);
+
+  if (
+    !sourceRowId ||
+    sourceRowId === targetRowId ||
+    draggedRowIdRef.current !== sourceRowId ||
+    !rowIds.includes(sourceRowId) ||
+    !rowIds.includes(targetRowId)
+  ) {
+    return null;
+  }
+
+  const placement = getSchemaRowDropPlacement({
+    clientY: event.clientY,
+    targetRect: event.currentTarget.getBoundingClientRect(),
+  });
+  const targetIndex = getSchemaRowDropTargetIndex({
+    placement,
+    rowIds,
+    sourceRowId,
+    targetRowId,
+  });
+  if (targetIndex < 0) return null;
+
+  return {
+    placement,
+    sourceRowId,
+    targetRowId,
+    targetIndex,
+  };
+}
+
+function createSchemaRowDragPreview({
+  sourceElement,
+  label,
+}: {
+  sourceElement: HTMLElement;
+  label: string;
+}) {
+  const dragElement = document.createElement("div");
+  const rect = sourceElement.getBoundingClientRect();
+
+  Object.assign(dragElement.style, {
+    width: `${rect.width}px`,
+    padding: "8px",
+    border: "1px solid var(--ring)",
+    borderRadius: "4px",
+    backgroundColor: "var(--background)",
+    boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
+    opacity: "0.8",
+    position: "fixed",
+    zIndex: "9999",
+    pointerEvents: "none",
+  });
+  dragElement.textContent = label;
+  document.body.appendChild(dragElement);
+
+  return dragElement;
+}
+
+function removeSchemaRowDragPreviewAfterFrame(dragElement: HTMLElement) {
+  window.requestAnimationFrame(() => {
+    dragElement.remove();
+  });
+}

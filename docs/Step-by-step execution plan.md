@@ -184,37 +184,79 @@ Verification:
 
 ### 📋 Antigravity Prompt (Copy & Paste):
 ```text
-Task: Inspect the cloned `retab-ui` repository in `.reference/repos/retab-ui`, install the real `@retab/schema-builder` component, and build the Schema Management CRUD API in FastAPI.
+Task: Implement Phase 2 — Install the real @retab/schema-builder component in Next.js, build the high-level SchemaEditorPanel workbench wrapper, and implement the complete Schema Management CRUD API in FastAPI with MongoDB and Draft-07 validation.
 
-Context:
-- CRITICAL GROUNDING STEP: First, inspect `.reference/repos/retab-ui` and `.reference/docs/retab-ui-docs/schema-builder.json` using `view_file` / `find_by_name` to see the exact file structure, dependencies (`ajv`, `ajv-errors`, `ajv-formats`, `sonner`, etc.), and exported TypeScript components of `retab-ui`'s schema builder. Do NOT guess or fabricate the schema builder from memory.
+Context & Grounding Rules:
+- CRITICAL GROUNDING: Check `references.json`, `.reference/INDEX.md`, and inspect `.reference/repos/retab-ui` and `.reference/repos/retab-ui/public/r/schema-builder.json`. Do NOT hallucinate or vendor dummy schema builders from memory.
+- All CLI commands must be non-interactive (`-y` / `--yes`).
 
-Requirements:
-1. Backend Schema CRUD API (`backend/app/routers/schemas.py` & `backend/app/models/schema.py`):
+Implementation Plan:
+
+1. Backend Schema Models & Validation (`backend/app/models/schema.py`):
    - Define Pydantic models:
      - `SchemaCreate`: `name: str`, `description: Optional[str] = None`, `json_schema: dict`.
-     - `SchemaUpdate`: Partial update fields.
-     - `SchemaResponse`: `id: str`, `name: str`, `description: Optional[str]`, `json_schema: dict`, `created_at: datetime`, `updated_at: datetime`.
-   - Implement endpoints mounted at `/api/schemas`:
-     - `POST /api/schemas`: Save a new schema to `app_db.schemas`.
-     - `GET /api/schemas`: List all saved schemas.
-     - `GET /api/schemas/{schema_id}`: Fetch a single schema by ID.
-     - `PUT /api/schemas/{schema_id}`: Update an existing schema.
-     - `DELETE /api/schemas/{schema_id}`: Delete a schema.
-   - Seed 2 default templates on startup if `app_db.schemas` is empty ("Commercial Invoice" and "Clinical / Lab Report").
+     - `SchemaUpdate`: `name: Optional[str] = None`, `description: Optional[str] = None`, `json_schema: Optional[dict] = None`.
+     - `SchemaResponse`: `id: str`, `name: str`, `description: Optional[str] = None`, `json_schema: dict`, `created_at: datetime`, `updated_at: datetime`.
+   - Strict Draft-07 validation:
+     - Use `jsonschema.Draft7Validator.check_schema(schema)` and ensure `schema.get("type") == "object"`.
+     - Raise HTTP 400 with a clear message if the schema is not valid Draft-07 or root is not an object.
 
-2. Frontend Retab Schema Builder (`frontend/`):
-   - Install the official Retab schema builder non-interactively:
-     `npx shadcn@latest add "https://ui.retab.com/r/schema-builder.json" -y`
-   - Verify the generated files against `.reference/repos/retab-ui` and install any peer dependencies required for `npm run build` to succeed.
-   - Create a high-level wrapper component `frontend/src/components/retab/schema-editor-panel.tsx` that imports the installed Retab `SchemaBuilder` component and adds a toolbar for:
-     - "Load Template" selector (fetches from `GET /api/schemas`).
-     - "Save / Update Schema" modal dialog (`POST` / `PUT /api/schemas`).
-     - "Import / Export Raw JSON" toggle.
+2. Backend Database Layer & Seeding (`backend/app/database.py`):
+   - Add a dependency function `get_schemas_collection()` returning `app_db["schemas"]` (allowing easy FastAPI dependency override in tests).
+   - In `init_databases()` / lifespan:
+     - Check if `app_db["schemas"]` is empty.
+     - If empty, seed 2 default templates with timestamps:
+       1. "Commercial Invoice" (matching `docs/Master Architecture spec.md` Section 5.1).
+       2. "Clinical / Lab Report" (specimen collection date, patient_name, patient_id, ordering_physician, and test_results array with test_name, result_value, units, reference_range, flag).
+     - Ensure seeding handles offline MongoDB gracefully (logs a warning, does not crash startup).
 
-Verification:
-- Verify `GET http://localhost:8001/api/schemas` returns the seeded default schemas.
-- Run `npm run build` in `frontend/` to verify the real `@retab/schema-builder` and all its TypeScript types compile with zero errors.
+3. Backend Router (`backend/app/routers/schemas.py` & `backend/app/main.py`):
+   - Create router mounted at `/api/schemas`:
+     - `POST /api/schemas`: Validates Draft-07 schema, stores document in MongoDB with UTC timestamps, returns 201 with `SchemaResponse`.
+     - `GET /api/schemas`: Returns list of all schemas with `_id` mapped to `id: str`.
+     - `GET /api/schemas/{schema_id}`: Validates BSON `ObjectId`, returns 404 if invalid/not found, else returns `SchemaResponse`.
+     - `PUT /api/schemas/{schema_id}`: Partial update with Draft-07 re-validation if `json_schema` provided, updates `updated_at`, returns updated `SchemaResponse` or 404.
+     - `DELETE /api/schemas/{schema_id}`: Deletes schema, returns 200 `{"status": "deleted", "id": schema_id}` or 404.
+   - Register the router in `backend/app/main.py`.
+
+4. Backend Automated Test Suite (`backend/tests/test_schemas.py`):
+   - Write comprehensive async pytest tests using FastAPI TestClient / AsyncClient:
+     - Test Draft-07 rejection of invalid schemas (returns 400).
+     - Test full CRUD lifecycle (`POST` -> `GET` -> `GET {id}` -> `PUT` -> `DELETE`).
+     - Test 404 behavior for invalid or non-existent IDs.
+     - Mock MongoDB collection using `app.dependency_overrides[get_schemas_collection]` so tests run fast and isolated without requiring a live MongoDB instance.
+
+5. Frontend Dependencies & Retab Installation (`frontend/`):
+   - Run in `frontend/`:
+     - `npx shadcn@latest add "https://ui.retab.com/r/schema-builder.json" -y`
+     - `npx shadcn@latest add button accordion -y` (installs required peer UI components imported by Retab)
+     - `npm install ajv ajv-errors ajv-formats sonner react-hook-form @hookform/resolvers`
+   - Check `frontend/package.json` and ensure `@radix-ui/react-accordion`, `@radix-ui/react-dropdown-menu`, etc. are present and resolve properly.
+
+6. Frontend API Client (`frontend/src/lib/api-client.ts`):
+   - Add schema API functions:
+     - `fetchSchemas(): Promise<SchemaResponse[]>`
+     - `fetchSchemaById(id: string): Promise<SchemaResponse>`
+     - `createSchema(payload: SchemaCreate): Promise<SchemaResponse>`
+     - `updateSchema(id: string, payload: SchemaUpdate): Promise<SchemaResponse>`
+     - `deleteSchema(id: string): Promise<void>`
+
+7. Schema Editor Panel Component (`frontend/src/components/retab/schema-editor-panel.tsx`):
+   - Controlled wrapper around Retab's `SchemaBuilder` with `features={{ jsonMode: true, definitions: true }}`.
+   - Add top toolbar:
+     - **Template Selector**: Dropdown to select and load templates from `GET /api/schemas`.
+     - **Save / Update Dialog**: Modal dialog prompting for Schema Name & Description; if an existing schema is active, offers "Update Current Schema" (`PUT`) or "Save as New Copy" (`POST`).
+     - **View Switcher Toggle**: Controls `view="fields" | "json"` for toggling between the visual tree editor and raw JSON editor.
+     - **New Schema Button**: Resets editor to a blank root object `{ type: "object", properties: {}, required: [] }`.
+   - Include `Toaster` from `sonner` for instant visual toast feedback on save/update/error.
+
+8. Workbench Page Integration (`frontend/src/app/page.tsx`):
+   - Replace the starter placeholder in `page.tsx` with the mounted `SchemaEditorPanel`.
+
+Verification Checklist:
+- Run `.venv/bin/pytest backend/tests` -> All health and schema tests pass (100% green).
+- Run `npm run build` in `frontend/` -> Next.js 14 compiles with 0 TypeScript/ESLint errors.
+- Test `GET http://localhost:8001/api/schemas` -> Seeded templates returned when MongoDB is up.
 ```
 
 ---

@@ -21,6 +21,7 @@ dependencies = [
     "httpx>=0.27.0",
     "sse-starlette>=2.1.0",
     "filetype>=1.2.0",
+    "jsonschema>=4.20.0",
     "json-schema-to-pydantic>=0.4.11",
     "click>=8.1.0",
     "python-dotenv>=1.2.2",
