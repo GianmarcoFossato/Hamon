@@ -18,6 +18,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+os.environ["GIT_SSL_NO_VERIFY"] = "true"
+
 ROOT_DIR = Path(__file__).resolve().parent.parent
 CONFIG_PATH = ROOT_DIR / "references.json"
 REF_DIR = ROOT_DIR / ".reference"
@@ -68,7 +70,7 @@ def sync_repository(repo: dict, active_repo_names: set[str]) -> None:
             if res_default.returncode != 0:
                 print(f"  [X] Failed to clone {name}: {res_default.stderr.strip()}", file=sys.stderr)
                 return
-        print(f"  [✓] Cloned {name} successfully.")
+        print(f"  [OK] Cloned {name} successfully.")
     else:
         print(f"[*] Updating existing repo {name}...")
         res = subprocess.run(
@@ -79,7 +81,7 @@ def sync_repository(repo: dict, active_repo_names: set[str]) -> None:
         if res.returncode != 0:
             print(f"  [!] Pull failed for {name} ({res.stderr.strip()}). Leaving local copy.", file=sys.stderr)
         else:
-            print(f"  [✓] Updated {name}.")
+            print(f"  [OK] Updated {name}.")
 
 
 def prune_unlisted_repos(active_names: set[str]) -> None:
@@ -159,7 +161,7 @@ def sync_documentation(doc_site: dict) -> None:
         fname = sanitize_filename(url)
         dest = site_dir / fname
         if download_url(url, dest):
-            print(f"  [✓] Saved {url} -> {dest.relative_to(ROOT_DIR)}")
+            print(f"  [OK] Saved {url} -> {dest.relative_to(ROOT_DIR)}")
 
 
 def generate_tree(path: Path, max_depth: int = 2, current_depth: int = 1) -> list[str]:
@@ -245,7 +247,7 @@ def build_index(config: dict) -> None:
     INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(INDEX_PATH, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
-    print(f"[✓] Generated index at {INDEX_PATH.relative_to(ROOT_DIR)}")
+    print(f"[OK] Generated index at {INDEX_PATH.relative_to(ROOT_DIR)}")
 
 
 def main() -> None:
@@ -264,7 +266,7 @@ def main() -> None:
         sync_documentation(site)
 
     build_index(config)
-    print("\n[✓] References synchronization complete.")
+    print("\n[OK] References synchronization complete.")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,9 @@
+import os
 from functools import lru_cache
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 DEFAULT_ENV_FILE = str(ROOT_DIR / ".env")

@@ -58,6 +58,46 @@ def get_schemas_collection():
     return db["schemas"]
 
 
+def get_documents_collection():
+    """Dependency provider for documents collection in app_db."""
+    client = app_client or get_app_client()
+    try:
+        db = app_db if app_db is not None else client.get_default_database()
+    except Exception:
+        db = client["extraction_app_db"]
+    return db["documents"]
+
+
+def get_jobs_collection():
+    """Dependency provider for jobs collection in app_db."""
+    client = app_client or get_app_client()
+    try:
+        db = app_db if app_db is not None else client.get_default_database()
+    except Exception:
+        db = client["extraction_app_db"]
+    return db["jobs"]
+
+
+def get_harmonization_profiles_collection():
+    """Dependency provider for harmonization_profiles collection in app_db."""
+    client = app_client or get_app_client()
+    try:
+        db = app_db if app_db is not None else client.get_default_database()
+    except Exception:
+        db = client["extraction_app_db"]
+    return db["harmonization_profiles"]
+
+
+def get_target_db():
+    """Dependency provider for target enterprise database."""
+    client = target_client or get_target_client()
+    try:
+        db = target_db if target_db is not None else client.get_default_database()
+    except Exception:
+        db = client["company_enterprise_db"]
+    return db
+
+
 DEFAULT_SCHEMA_TEMPLATES = [
     {
         "name": "Commercial Invoice",
@@ -200,7 +240,7 @@ async def ping_databases() -> dict[str, bool]:
     return results
 
 
-async def init_databases() -> None:
+async def init_databases() -> dict[str, bool]:
     try:
         status = await ping_databases()
         if status.get("app_db"):
@@ -213,8 +253,10 @@ async def init_databases() -> None:
             logger.info("Connected to target_db successfully.")
         else:
             logger.warning("target_db is currently unreachable (server starting cleanly).")
+        return status
     except Exception as exc:
         logger.warning("Non-blocking DB connection check warning during startup: %s", exc)
+        return {"app_db": False, "target_db": False}
 
 
 async def close_databases() -> None:

@@ -55,7 +55,14 @@ const BLANK_SCHEMA: ExtendedJSONSchema7 = {
   required: [],
 };
 
-export function SchemaEditorPanel() {
+interface SchemaEditorPanelProps {
+  onSchemaChange?: (
+    schema: ExtendedJSONSchema7,
+    activeSchema: SchemaResponse | null,
+  ) => void;
+}
+
+export function SchemaEditorPanel({ onSchemaChange }: SchemaEditorPanelProps = {}) {
   const [schema, setSchema] = React.useState<ExtendedJSONSchema7>(BLANK_SCHEMA);
   const [activeSchema, setActiveSchema] = React.useState<SchemaResponse | null>(null);
   const [schemasList, setSchemasList] = React.useState<SchemaResponse[]>([]);
@@ -76,9 +83,11 @@ export function SchemaEditorPanel() {
       if (autoSelectFirst && data.length > 0 && !activeSchema) {
         const first = data[0];
         setActiveSchema(first);
-        setSchema(first.json_schema as unknown as ExtendedJSONSchema7);
+        const parsed = first.json_schema as unknown as ExtendedJSONSchema7;
+        setSchema(parsed);
         setSchemaName(first.name);
         setSchemaDescription(first.description || "");
+        onSchemaChange?.(parsed, first);
       }
     } catch (err: unknown) {
       console.warn("Could not load schema templates from API:", err);
@@ -93,9 +102,11 @@ export function SchemaEditorPanel() {
 
   const handleSelectTemplate = (item: SchemaResponse) => {
     setActiveSchema(item);
-    setSchema(item.json_schema as unknown as ExtendedJSONSchema7);
+    const parsed = item.json_schema as unknown as ExtendedJSONSchema7;
+    setSchema(parsed);
     setSchemaName(item.name);
     setSchemaDescription(item.description || "");
+    onSchemaChange?.(parsed, item);
     toast.success(`Loaded "${item.name}"`);
   };
 
@@ -105,6 +116,7 @@ export function SchemaEditorPanel() {
     setSchemaName("New Extraction Schema");
     setSchemaDescription("");
     setView("fields");
+    onSchemaChange?.(BLANK_SCHEMA, null);
     toast.info("Created new blank root schema");
   };
 
@@ -129,7 +141,7 @@ export function SchemaEditorPanel() {
     try {
       const updated = await updateSchema(activeSchema.id, {
         name: schemaName.trim(),
-        description: schemaDescription.trim() || null,
+        description: schemaDescription.trim() || undefined,
         json_schema: schema as unknown as Record<string, unknown>,
       });
       setActiveSchema(updated);
@@ -154,7 +166,7 @@ export function SchemaEditorPanel() {
     try {
       const created = await createSchema({
         name: schemaName.trim(),
-        description: schemaDescription.trim() || null,
+        description: schemaDescription.trim() || undefined,
         json_schema: schema as unknown as Record<string, unknown>,
       });
       setActiveSchema(created);
@@ -319,7 +331,10 @@ export function SchemaEditorPanel() {
       <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm min-h-[500px]">
         <SchemaBuilder
           value={schema}
-          onValueChange={setSchema}
+          onValueChange={(next) => {
+            setSchema(next);
+            onSchemaChange?.(next, activeSchema);
+          }}
           view={view}
           onViewChange={setView}
           features={{
