@@ -400,124 +400,134 @@ Verification:
 
 ### 📋 Antigravity Prompt (Copy & Paste):
 ```text
-Task: Build the Dual-Pane Extraction Studio and Extraction History Dashboard in Next.js.
+Task: Build the Dual-Pane Extraction Studio and Extraction History Dashboard in Next.js 14 LTS.
 
 Context:
-- Inspect `.reference/repos/retab-ui` first to see available file/PDF viewer components or install `@retab` viewer primitives if available, falling back to a clean PDF object/canvas viewer backed by our `GET /api/documents/{doc_id}/file` and `/pages/{page_number}` endpoints.
+- Grounded on the backend endpoints: `/api/documents/upload`, `/api/documents/{doc_id}/pages/{page_number}/render`, `/api/schemas`, `/api/extract/start`, `/api/extract/stream/{job_id}`, and `/api/extract/jobs`.
+- Connects the visual `@retab/schema-builder` with an interactive 150 DPI document previewer and live Server-Sent Events (SSE) extraction tracker.
 
 Requirements:
-1. Document Viewer Component (`frontend/src/components/retab/pdf-viewer.tsx`):
-   - Supports drag-and-drop PDF upload (`POST /api/documents/upload`) when no document is loaded.
-   - Displays the uploaded PDF with page navigation, zoom controls, and page thumbnails served from `/api/documents/{doc_id}/...`.
+1. Document Viewer Component (`frontend/src/components/studio/pdf-viewer.tsx`):
+   - Drag-and-drop file upload zone triggering `POST /api/documents/upload` when no document is active.
+   - Page navigation (previous/next, jump to page) with thumbnail ribbon.
+   - Interactive zoom controls (zoom in, zoom out, reset).
+   - Serves crisp 150 DPI page images rendered by backend from `GET /api/documents/{doc_id}/pages/{page_number}/render`.
+   - Download original file action via `GET /api/documents/{doc_id}/file`.
 
-2. Dual-Pane Extraction Workbench (`frontend/src/app/page.tsx`):
-   - Top Action Bar: Document uploader/selector, Schema template selector, LLM model indicator badge, and "Run Extraction" button.
-   - Left Pane: `PdfViewer` displaying the active document.
-   - Right Pane: `SchemaEditorPanel` (Visual Schema Builder + Raw JSON Schema code tab).
-   - Results Drawer / Panel:
-     - Connects to `GET /api/extract/stream/{job_id}` via `EventSource` to display live progress (`rendering_pages`, `calling_vlm`, `completed`).
-     - Displays extracted structured JSON in both a collapsible JSON Tree view and a Tabular view (for arrays/records).
-     - Includes a prominent "Harmonize with BDI-Kit →" button that routes to `/harmonize/{job_id}`.
+2. Results Panel & SSE Tracker (`frontend/src/components/studio/results-panel.tsx`):
+   - Real-time SSE progress bar and stage status badges (`waiting_for_render`, `extracting`, `merging`, `completed`, `partial_success`, `failed`).
+   - Collapsible, formatted JSON Tree view of extracted data with copy-to-clipboard.
+   - Auto-detected Tabular View for array/records (e.g. `line_items`, `test_results`) with column sorting.
+   - Prominent "Harmonize with BDI-Kit →" call-to-action button routing to `/harmonize/{job_id}`.
 
-3. Extraction History Page (`frontend/src/app/history/page.tsx`):
-   - Fetches jobs from `GET /api/extract/jobs`.
-   - Displays Document Name, Schema Name, Created Date, Page Count, Extraction Status, Harmonization Status badge, and actions ("Inspect JSON", "Open in Harmonizer").
+3. Dual-Pane Extraction Workbench (`frontend/src/app/page.tsx`):
+   - Top Action Bar: Active document indicator, schema template badge, backend health status badge, and "Run Extraction" button.
+   - Left Pane: `PdfViewer` component.
+   - Right Pane: Tabbed interface switching between:
+     - `schema`: Mounted `SchemaEditorPanel` (`@retab/schema-builder` wrapper with visual fields & raw JSON modes, template loader, and save/update dialog).
+     - `results`: Mounted `ResultsPanel` displaying live SSE stream and extracted data.
+
+4. Extraction History Page (`frontend/src/app/history/page.tsx`):
+   - Fetches historical jobs from `GET /api/extract/jobs`.
+   - Displays Document Name, Schema Name, Creation Timestamp, Page Count, Status Badge (`completed`, `partial_success`, `failed`), Token Usage, and Harmonization Status.
+   - Row Actions: "Inspect JSON" modal dialog and "Open in Harmonizer" navigation button.
 
 Verification:
-- Run `npm run build` in `frontend/` and verify all pages (`/`, `/history`) compile without TypeScript or ESLint errors.
+- Run `npm run build` in `frontend/` and verify all routes (`/`, `/history`) compile with zero TypeScript or ESLint errors.
+- Test uploading a document, selecting the "Commercial Invoice" template, running extraction, and verifying the SSE stream updates the results panel live.
 ```
 
 ---
 
-## Phase 5: Data Harmonization Engine (`bdi-kit`) & Extensible Harmonizer UI
+## Phase 5: Data Harmonization Engine (`bdi-kit`), AST Formula Evaluator & Harmonizer Studio UI
 
 ### 📋 Antigravity Prompt (Copy & Paste):
 ```text
-Task: Implement the Data Harmonization Engine in FastAPI using NYU VIDA's `bdi-kit` (`bdikit`) library and create a modular, extensible Frontend Harmonization Studio shell.
+Task: Implement the Data Harmonization Engine in FastAPI using NYU VIDA's `bdi-kit` (`bdikit`), AST formula evaluation (`simpleeval`), nested BSON unflattening, and the interactive Harmonization Studio in Next.js.
 
-Context:
-- CRITICAL GROUNDING STEP: Before writing any code for this phase, inspect `.reference/repos/bdi-kit` (especially `bdikit/api.py`) and `.reference/docs/bdi-kit-docs/` using `view_file` and `grep_search`.
-- Verify the exact signatures of `bdikit`:
-  - `import bdikit as bdi`
-  - `bdi.match_schema(source, target, method=...)`
-  - `bdi.rank_schema_matches(source, target, attributes=..., top_k=10, method=...)`
-  - `bdi.match_values(source, target, attribute_matches=..., method=...)`
-  - `bdi.rank_value_matches(source, target, attribute_matches=..., top_k=10, method=...)`
-  - `bdi.create_harmonization_spec(mappings=[{"source": ..., "target": ..., "mapper": ...}])`
-  - `bdi.materialize_mapping(source, harmonization_spec)`
-- How extracted JSON connects to `bdi-kit`:
-  - `bdi-kit` operates on `pandas.DataFrame` objects.
-  - When a user opens an extraction job in the Harmonizer, the backend converts the extracted JSON (either a top-level flat object, or a selected nested array of objects like `line_items`, or multiple extracted jobs sharing the same schema) into a `source_df: pd.DataFrame`.
-  - The target can be either an existing collection in `TARGET_MONGODB_URI` (sampled into a `target_df: pd.DataFrame` or represented as a target schema DataFrame) or a user-defined target schema table.
-- Note on Frontend UI: The user is still finalizing the custom visual design of the Harmonization interface. Build the frontend page (`frontend/src/app/harmonize/[id]/page.tsx`) using clean, decoupled sub-components inside `frontend/src/components/harmonizer/` with clear props and state hooks so the UI layout can be easily customized later without touching backend API calls.
+Context & Grounding:
+- Integrates `bdi-kit` for schema and value matching, `simpleeval` for sandboxed mathematical/string transformations, and custom dot/bracket unflattening for hierarchical BSON mapping.
+- Implements enterprise data safety: guarded 2-phase commit with lease acquisition, upsert by business key, null-key quarantine collection (`{collection}_quarantine`), and compensating rollback on failure.
 
 Requirements:
-1. Target DB Introspection & DataFrame Adapter (`backend/app/services/bdi_service.py`):
-   - `json_extraction_to_dataframe(raw_extraction: dict, root_array_path: Optional[str] = None) -> pd.DataFrame`:
-     - Converts extracted JSON into a Pandas DataFrame (if `root_array_path` is provided, e.g. `"line_items"`, extracts that list of records into rows while optionally flattening parent metadata fields; otherwise normalizes the dict via `pd.json_normalize`).
-   - `target_collection_to_dataframe(collection_name: str, sample_size: int = 100) -> pd.DataFrame`:
-     - Samples documents from `target_db[collection_name]` (excluding `_id` or converting `ObjectId` to str) into a target `pd.DataFrame`. If the target collection is empty, accepts a target column list/schema definition to construct an empty typed `pd.DataFrame`.
-   - Wrappers around real `bdikit` primitives:
-     - `run_schema_matching(source_df, target_df, method: str = "magneto_ft_bp", top_k: int = 5)`: Calls `bdi.match_schema()` and `bdi.rank_schema_matches()` to return recommended column mappings and similarity scores, with safe fallback to string/similarity matching if an LLM key or model weight is unavailable.
-     - `run_value_matching(source_df, target_df, attribute_matches, method: str = "tfidf")`: Calls `bdi.match_values()` to propose value-level mappings (`source_value`, `target_value`, `similarity`).
-     - `materialize_and_cast(source_df, harmonization_spec: list[dict], type_casts: dict)`:
-       - Calls `bdi.create_harmonization_spec(harmonization_spec)` / `bdi.materialize_mapping(source_df, harmonization_spec)` to produce the harmonized DataFrame.
-       - Applies optional post-harmonization BSON type casting for MongoDB insertion (`string`, `int`, `float` sanitizing currency symbols `$, €, £, ¥` and commas, `iso_date` -> `datetime.datetime`, `boolean`, `object_id` -> `bson.ObjectId`, and `constant` metadata injection).
+1. AST Formula Evaluator & Safe Functions (`backend/app/services/formula_evaluator.py`):
+   - Sandboxed expression evaluator using `simpleeval.SimpleEval`.
+   - Security constraints: Rejects expressions >10,000 characters; strictly forbids dunder attribute traversal (`"__"` in expression) to prevent sandbox escape.
+   - Safe built-in functions: `clean_currency` (cleans `$`, `€`, commas, `(50)` negatives), `to_date` (parses arbitrary date formats to `YYYY-MM-DD`), `round`, `abs`, `min`, `max`, `len`, `str`, `int`, `float`, `upper`, `lower`, `strip`, `re_sub`, `str_slice`.
 
-2. Harmonization Router & Saved Profiles (`backend/app/routers/harmonize.py` & `backend/app/models/harmonization.py`):
-   - `GET /api/harmonize/target/collections`: Lists collections in `target_db` (`TARGET_MONGODB_URI`) plus document counts and inferred fields.
-   - `GET /api/harmonize/methods`: Returns available `bdi-kit` schema matching and value matching method names inspected from `bdikit`.
-   - `POST /api/harmonize/match-schema`: Accepts `{job_id, root_array_path, target_collection, target_columns, method}` and returns `bdi-kit` schema match candidates with similarity scores + top-k alternatives.
-   - `POST /api/harmonize/match-values`: Accepts confirmed attribute matches and runs `bdi.match_values()`, returning value alignment tables per matched attribute.
-   - `POST /api/harmonize/preview`: Accepts `{job_id, root_array_path, harmonization_spec, type_casts}` -> runs `bdi.materialize_mapping()` + BSON type casting and returns a side-by-side preview of source rows vs. harmonized target documents.
-   - `GET /api/harmonize/profiles` & `POST /api/harmonize/profiles`: Save and load reusable `bdi-kit` harmonization specifications in `app_db.harmonization_profiles`.
-   - `POST /api/harmonize/commit`: Inserts the harmonized records into `target_db[target_collection]` (`insert_many` / `insert_one`) and updates `app_db.jobs` with `harmonized=True` and `harmonized_target_collection=target_collection`.
+2. BSON Unflattening & Path Resolver (`backend/app/services/unflatten_utils.py`):
+   - `unflatten_dict(flat_dict)`: Reconstructs nested dictionaries and arrays from flat keys.
+   - Supports dot notation (`"financials.grand_total"`) and bracketed/numeric array notation (`"line_items[0].qty"` or `"items.0.sku"`).
+   - Sanitizes `NaN`, `inf`, `None`, and pandas `<NA>` values for BSON driver compatibility (`sanitize_bson_value`).
 
-3. Modular Harmonizer Frontend Shell (`frontend/src/app/harmonize/[id]/page.tsx` & `frontend/src/components/harmonizer/`):
-   - Create a clean, custom-hook-driven state layer (`useHarmonizationSession(jobId)`) separating API logic from presentation.
-   - Build modular, replaceable UI panels in `frontend/src/components/harmonizer/`:
-     - `TargetConfigBar.tsx`: Select target MongoDB collection (or define custom target columns), choose root JSON path (document root vs. array like `line_items`), and load/save a Harmonization Profile.
-     - `SchemaMatchingPanel.tsx`: Triggers `POST /api/harmonize/match-schema`, displays `bdi-kit` `source_attribute -> target_attribute` rows with similarity score badges, top-k alternative dropdowns, and BSON type-cast selectors.
-     - `ValueMatchingPanel.tsx`: Triggers `POST /api/harmonize/match-values` for selected columns, allowing human-in-the-loop editing of `source_value -> target_value` dictionaries (`mapper`).
-     - `MaterializePreviewPanel.tsx`: Calls `POST /api/harmonize/preview` to show the materialized `bdi-kit` table/JSON diff and the "Commit to Enterprise MongoDB" button (`POST /api/harmonize/commit`).
+3. BDI Service & Data Normalization (`backend/app/services/bdi_service.py`):
+   - `validate_collection_name(name)`: Guards against NoSQL injection (alphanumeric/hyphen/underscore, max 64 chars, rejects `system.` or `$`).
+   - `json_extraction_to_dataframe(raw_extraction, root_array_path)`: Normalizes extracted JSON to Pandas DataFrame, flattening nested arrays (e.g. `line_items`) and enriching them with top-level scalar attributes.
+   - `target_collection_to_dataframe(collection_name, sample_size=100)`: Samples target enterprise collection documents into a DataFrame.
+   - Schema Matching (`match_schema`):
+     - `"llm"`: Default semantic alignment using LiteLLM prompt engineering with source/target samples.
+     - `"heuristic"`: Fast token Jaccard similarity with heuristic naming hints.
+     - `"similarity_flooding"` & `"jaccard_distance"`: Structural alignment via `bdikit.match_schema`.
+   - Value Matching (`match_values`): Proposes categorical value dictionaries via `bdikit.match_values` or exact token fallback.
+   - `materialize_and_cast(source_df, field_mappings, tenant_id)`: Applies transforms (`direct`, `trim`, `string`, `int`, `float`, `clean_currency`, `iso_date`, `boolean`, `object_id`, `constant`, `formula`), unflattens paths, injects `tenant_id`, and returns harmonized records with diagnostic callouts.
+
+4. Harmonization Router (`backend/app/routers/harmonize.py`):
+   - `GET /api/harmonize/target/collections`: Lists available enterprise collections in `TARGET_MONGODB_URI`.
+   - `GET /api/harmonize/methods`: Returns available schema matching algorithms.
+   - `POST /api/harmonize/match-schema`: Generates source-to-target field alignments with confidence scores.
+   - `POST /api/harmonize/match-values`: Generates categorical value alignment dictionaries.
+   - `POST /api/harmonize/preview`: 300ms debounced live preview returning sample raw vs. harmonized diff, top 10 preview rows, and diagnostics.
+   - `GET /api/harmonize/profiles` & `POST /api/harmonize/profiles` & `DELETE /api/harmonize/profiles/{id}`: CRUD operations for saved mapping profiles.
+   - `POST /api/harmonize/commit`: Guarded 2-Phase Commit:
+     - Phase 1: Acquires atomic lease (`commit_in_progress=True`, status `"harmonizing"`).
+     - Phase 2: Commits records (`append` mode or `upsert` mode with `business_key`). Quarantines null-key records into `{collection}_quarantine`.
+     - Compensating Rollback: On error, marks job `"harmonize_failed"` and releases lease.
+
+5. Harmonizer Studio Frontend (`frontend/src/app/harmonize/[id]/page.tsx` & `frontend/src/components/harmonizer/`):
+   - `StudioHeader`: Document metadata, target collection picker, and primary "Commit to Enterprise MongoDB" action.
+   - `MappingTable`: Interactive source-to-target mapping grid, matching method selector, similarity scores, transform dropdown, and formula editor modal trigger.
+   - `FormulaDialog`: AST formula editor with syntax examples, available variable chips, and real-time expression test runner.
+   - `LivePreviewPanel`: Side-by-side comparison of raw extraction vs. harmonized BSON document, 10-row preview table, and transformation diagnostics.
 
 Verification:
-- Seed `target_db` (`localhost:27018`) with a sample target collection (`enterprise_invoices`) containing 3 sample records.
-- Run a backend integration test that takes a sample extracted invoice JSON, runs `bdi.match_schema()` and `bdi.materialize_mapping()` against `enterprise_invoices`, previews the harmonized output, and commits it to `target_db`.
+- Run backend unit tests: `pytest backend/tests/test_formula_evaluator.py backend/tests/test_unflatten.py backend/tests/test_bdi_harmonize.py`.
+- Run `npm run build` in `frontend/` confirming `/harmonize/[id]` compiles cleanly.
+- Perform an end-to-end commit: Preview harmonization, commit to target DB, and verify records in `TARGET_MONGODB_URI`.
 ```
 
 ---
 
-## Phase 6: Closed-Source Licensing Compliance, Docker Packaging & E2E Smoke Test
+## Phase 6: Legal Attribution, Full-Stack Containerization & E2E Smoke Test
 
 ### 📋 Antigravity Prompt (Copy & Paste):
 ```text
-Task: Generate commercial closed-source legal attribution files, create production Dockerfiles with proper container networking, and run an end-to-end pipeline verification script.
-
-Context:
-- Every dependency (`retab-ui` MIT, `litellm` MIT, `pypdfium2` Apache-2.0/BSD, `pymongo` Apache-2.0, `bdi-kit` Apache-2.0, `pandas` BSD-3-Clause, `FastAPI` MIT, `Next.js` MIT) uses a permissive license compatible with commercial closed-source distribution.
-- Inside Docker Compose, the `backend` container must connect to `mongodb://mongo-app:27017/...` and `mongodb://mongo-target:27017/...` (using internal service names, whereas host scripts connect via `localhost:27017` and `localhost:27018`).
+Task: Finalize commercial licensing attribution, full-stack multi-container Docker Compose packaging, and the automated end-to-end smoke test pipeline.
 
 Requirements:
 1. Legal & Attribution Compliance (`THIRD_PARTY_LICENSES.md`):
-   - Generate `THIRD_PARTY_LICENSES.md` at the repository root listing all backend and frontend third-party packages, their permissive licenses (MIT, Apache-2.0, BSD), copyright notices (including `@retab/ui` and `VIDA-NYU/bdi-kit`), and the proprietary notice:
-     "The application proprietary orchestration logic, harmonization workflows, and custom user interface code are Copyright (C) [Your Company]. All rights reserved. Commercial closed-source distribution."
-   - Audit `requirements.txt` and `package.json` to ensure no GPL/AGPL packages were introduced.
+   - Inventories all third-party dependencies across backend and frontend.
+   - Documents MIT, Apache-2.0, BSD-3-Clause, HPND, and ISC licenses.
+   - Formally declares proprietary closed-source ownership of custom harmonization engines, AST evaluation, and UI code.
 
-2. Production Packaging (`backend/Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml`):
-   - `backend/Dockerfile`: Python 3.12 slim image installing `requirements.txt` and running Uvicorn.
-   - `frontend/Dockerfile`: Multi-stage Node 20 Alpine build accepting `ARG NEXT_PUBLIC_API_URL=http://localhost:8001/api` at build time.
-   - Update `docker-compose.yml` so `backend` uses `APP_MONGODB_URI=mongodb://mongo-app:27017/extraction_app_db` and `TARGET_MONGODB_URI=mongodb://mongo-target:27017/company_enterprise_db`.
+2. Full-Stack Docker Compose Packaging (`backend/Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml`):
+   - `backend/Dockerfile`: Python 3.12-slim container running FastAPI with Uvicorn on port 8001.
+   - `frontend/Dockerfile`: Multi-stage Node 20-alpine container running Next.js 14 on port 3000.
+   - `docker-compose.yml`: Coordinates all 4 services:
+     - `mongo-app` (port 27017:27017)
+     - `mongo-target` (port 27018:27017)
+     - `backend` (port 8001:8001, depends on both mongo instances being healthy)
+     - `frontend` (port 3000:3000, depends on backend)
 
-3. End-to-End Smoke Test (`scripts/test_pipeline.py`):
-   - Write an automated verification script that:
-     1. Verifies `/api/health` confirms both MongoDB instances are connected.
-     2. Creates a test schema via `POST /api/schemas`.
-     3. Generates a synthetic 1-page PDF using `pypdfium2` / `Pillow` and uploads it to `POST /api/documents/upload`.
-     4. Seeds a target enterprise collection in `TARGET_MONGODB_URI` (`port 27018`).
-     5. Executes `bdi-kit` schema matching (`POST /api/harmonize/match-schema`), value matching (`POST /api/harmonize/match-values`), preview materialization (`POST /api/harmonize/preview`), and commits the harmonized record (`POST /api/harmonize/commit`).
-     6. Queries `TARGET_MONGODB_URI` directly to assert the harmonized document arrived in the target enterprise collection.
+3. End-to-End Pipeline Smoke Test (`scripts/test_pipeline.py`):
+   - Automated verification script validating the 6-stage pipeline:
+     1. Sample 2-page PDF generation and 150 DPI rendering via `pypdfium2`.
+     2. Draft-07 schema normalization to OpenAI strict mode.
+     3. Multi-page vision extraction with seam deduplication.
+     4. Tabular normalization to Pandas DataFrame (`json_extraction_to_dataframe`).
+     5. Materialization with AST formula transforms and BSON unflattening (`unflatten_dict`).
+     6. Multi-tenant isolation and document assertions.
 
 Verification:
-- Run `python3 scripts/test_pipeline.py` and confirm all 6 stages pass end-to-end.
+- Run `python3 scripts/test_pipeline.py` and confirm all 6 stages output `[OK]`.
+- Run `docker compose up -d` and verify all 4 containers start and healthchecks pass.
 ```

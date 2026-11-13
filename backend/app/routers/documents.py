@@ -98,14 +98,20 @@ async def get_document_file(doc_id: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Underlying document file not found on disk")
 
+    media_type = doc.get("content_type", "application/octet-stream")
+    if doc.get("filename", "").lower().endswith(".pdf"):
+        media_type = "application/pdf"
+
     return FileResponse(
         path=str(file_path),
-        media_type=doc.get("content_type", "application/octet-stream"),
+        media_type=media_type,
         filename=doc.get("filename", "document"),
+        content_disposition_type="inline",
     )
 
 
 @router.get("/{doc_id}/pages/{page_number}")
+@router.get("/{doc_id}/pages/{page_number}/render")
 async def get_document_page_image(doc_id: str, page_number: int):
     """Ensure requested page is rendered, then stream 150 DPI PNG."""
     col = get_documents_collection()

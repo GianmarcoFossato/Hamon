@@ -3,15 +3,9 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import {
-  Activity,
-  ArrowRight,
-  CheckCircle2,
-  Database,
   History,
   Layers,
   Play,
-  RefreshCw,
-  Server,
   Sparkles,
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
@@ -26,7 +20,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function StudioPage() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [healthLoading, setHealthLoading] = useState(false);
 
   const [document, setDocument] = useState<DocumentResponse | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(0);
@@ -43,14 +36,11 @@ export default function StudioPage() {
   const eventSourceRef = useRef<EventSource | null>(null);
 
   const checkHealth = async () => {
-    setHealthLoading(true);
     try {
       const data = await fetchHealth();
       setHealth(data);
     } catch {
       setHealth(null);
-    } finally {
-      setHealthLoading(false);
     }
   };
 
@@ -156,54 +146,53 @@ export default function StudioPage() {
   const isTargetDbHealthy = health?.databases?.target_db ?? false;
 
   return (
-    <div className="flex h-screen flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 font-sans">
+    <div className="flex h-screen flex-col bg-background text-foreground font-sans">
       <Toaster richColors position="top-right" />
 
-      {/* Top Navbar */}
-      <header className="border-b border-slate-200 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900 sticky top-0 z-40">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 h-14">
+      {/* Top Navbar in Retab Aesthetic */}
+      <header className="border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-40">
+        <div className="flex items-center justify-between px-4 h-12">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+            <div className="size-6 rounded-md bg-primary text-primary-foreground flex items-center justify-center font-bold text-xs tracking-tight shadow-xs">
               H
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-sm font-bold tracking-tight">Hamon Studio</h1>
-                <Badge variant="outline" className="text-[10px] py-0 font-mono">
-                  GPT-4o Vision
-                </Badge>
-              </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold tracking-tight text-foreground">Hamon Studio</span>
+              <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4.5 font-mono text-muted-foreground">
+                GPT-4o Vision
+              </Badge>
             </div>
           </div>
 
           {/* Infrastructure Health Indicators */}
           <div className="hidden sm:flex items-center gap-3 text-xs">
             <div className="flex items-center gap-1.5" title="Internal App DB (Port 27017)">
-              <Database className={`h-3.5 w-3.5 ${isAppDbHealthy ? "text-emerald-500" : "text-amber-500"}`} />
-              <span className="text-[11px] text-slate-500">App DB</span>
+              <span className={`size-1.5 rounded-full ${isAppDbHealthy ? "bg-emerald-500" : "bg-amber-500"}`} />
+              <span className="text-[11px] text-muted-foreground">App DB</span>
             </div>
             <div className="flex items-center gap-1.5" title="Target Enterprise DB (Port 27018)">
-              <Database className={`h-3.5 w-3.5 ${isTargetDbHealthy ? "text-emerald-500" : "text-amber-500"}`} />
-              <span className="text-[11px] text-slate-500">Enterprise DB</span>
+              <span className={`size-1.5 rounded-full ${isTargetDbHealthy ? "bg-emerald-500" : "bg-amber-500"}`} />
+              <span className="text-[11px] text-muted-foreground">Enterprise DB</span>
             </div>
           </div>
 
           {/* Action CTAs */}
           <div className="flex items-center gap-2">
             <Link href="/history">
-              <Button variant="outline" size="xs" className="h-8 gap-1.5 text-xs">
-                <History className="h-3.5 w-3.5 text-slate-500" />
+              <Button variant="ghost" size="xs" className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+                <History className="size-3.5" />
                 <span>History</span>
               </Button>
             </Link>
 
             <Button
               size="xs"
+              variant="default"
               onClick={handleStartExtraction}
               disabled={isExtracting || !document || !activeSchema}
-              className="h-8 gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs text-xs font-semibold"
+              className="h-7 gap-1.5 text-xs font-medium"
             >
-              <Play className={`h-3.5 w-3.5 fill-current ${isExtracting ? "animate-spin" : ""}`} />
+              <Play className={`size-3 fill-current ${isExtracting ? "animate-spin" : ""}`} />
               <span>{isExtracting ? "Extracting..." : "Run Extraction"}</span>
             </Button>
           </div>
@@ -211,7 +200,7 @@ export default function StudioPage() {
       </header>
 
       {/* Main Dual-Pane Studio Body */}
-      <main className="flex flex-1 overflow-hidden p-3 gap-3">
+      <main className="flex flex-1 overflow-hidden p-3 gap-3 bg-muted/10">
         {/* Left Pane (50%): Document Viewer */}
         <section className="flex flex-1 flex-col overflow-hidden min-w-[380px]">
           <PdfViewer
@@ -233,13 +222,13 @@ export default function StudioPage() {
             className="flex flex-1 flex-col overflow-hidden"
           >
             <div className="flex items-center justify-between pb-2">
-              <TabsList className="h-8 p-0.5">
-                <TabsTrigger value="schema" className="text-xs gap-1.5 px-3 py-1">
-                  <Layers className="h-3.5 w-3.5" />
+              <TabsList className="h-7 p-0.5 bg-muted/60 border border-border">
+                <TabsTrigger value="schema" className="text-xs gap-1.5 px-3 py-0.5">
+                  <Layers className="size-3" />
                   Schema Editor
                 </TabsTrigger>
-                <TabsTrigger value="results" className="text-xs gap-1.5 px-3 py-1">
-                  <Sparkles className="h-3.5 w-3.5 text-indigo-500" />
+                <TabsTrigger value="results" className="text-xs gap-1.5 px-3 py-0.5">
+                  <Sparkles className="size-3" />
                   Results {activeJob ? "✓" : ""}
                 </TabsTrigger>
               </TabsList>

@@ -75,6 +75,11 @@ export function SchemaEditorPanel({ onSchemaChange }: SchemaEditorPanelProps = {
   const [schemaName, setSchemaName] = React.useState<string>("");
   const [schemaDescription, setSchemaDescription] = React.useState<string>("");
 
+  const onSchemaChangeRef = React.useRef(onSchemaChange);
+  React.useEffect(() => {
+    onSchemaChangeRef.current = onSchemaChange;
+  }, [onSchemaChange]);
+
   const loadTemplates = React.useCallback(async (autoSelectFirst = false) => {
     setIsLoadingTemplates(true);
     try {
@@ -87,7 +92,7 @@ export function SchemaEditorPanel({ onSchemaChange }: SchemaEditorPanelProps = {
         setSchema(parsed);
         setSchemaName(first.name);
         setSchemaDescription(first.description || "");
-        onSchemaChange?.(parsed, first);
+        onSchemaChangeRef.current?.(parsed, first);
       }
     } catch (err: unknown) {
       console.warn("Could not load schema templates from API:", err);
@@ -260,6 +265,7 @@ export function SchemaEditorPanel({ onSchemaChange }: SchemaEditorPanelProps = {
                 schemasList.map((tpl) => (
                   <DropdownMenuItem
                     key={tpl.id}
+                    onSelect={() => handleSelectTemplate(tpl)}
                     onClick={() => handleSelectTemplate(tpl)}
                     className="flex items-center justify-between cursor-pointer text-xs"
                   >
@@ -279,6 +285,7 @@ export function SchemaEditorPanel({ onSchemaChange }: SchemaEditorPanelProps = {
               )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
+                onSelect={() => loadTemplates(false)}
                 onClick={() => loadTemplates(false)}
                 className="text-xs text-muted-foreground cursor-pointer"
               >

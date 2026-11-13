@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast, Toaster } from "sonner";
+import { Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import {
   ExtractionJobResponse,
@@ -263,7 +264,7 @@ export default function HarmonizePage() {
     : [];
 
   return (
-    <div className="flex h-screen flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div className="flex h-screen flex-col bg-background text-foreground font-sans">
       <Toaster richColors position="top-right" />
 
       {/* Header Bar */}
@@ -287,27 +288,34 @@ export default function HarmonizePage() {
       />
 
       {/* Main Dual-Pane Studio Body */}
-      <main className="flex flex-1 overflow-hidden p-4 gap-4">
-        {/* Left Pane (50%): Columnar Mapping Table */}
-        <section className="flex flex-1 flex-col overflow-hidden min-w-[400px]">
-          <MappingTable
-            mappings={mappings}
-            onMappingsChange={handleMappingsChange}
-            sourceFields={sourceFields}
-            targetFields={targetFields}
-            sampleRow={sampleRow}
-            onAcceptHighConfidence={handleAcceptHighConfidence}
-          />
-        </section>
+      {isLoading ? (
+        <div className="flex flex-1 items-center justify-center p-8 text-xs text-muted-foreground">
+          <Loader2 className="size-5 animate-spin mr-2" />
+          <span>Loading extraction job details...</span>
+        </div>
+      ) : (
+        <main className="flex flex-1 overflow-hidden p-3 gap-3 bg-muted/10">
+          {/* Left Pane (50%): Columnar Mapping Table */}
+          <section className="flex flex-1 flex-col overflow-hidden min-w-[400px]">
+            <MappingTable
+              mappings={mappings}
+              onMappingsChange={handleMappingsChange}
+              sourceFields={sourceFields}
+              targetFields={targetFields}
+              sampleRow={sampleRow}
+              onAcceptHighConfidence={handleAcceptHighConfidence}
+            />
+          </section>
 
-        {/* Right Pane (50%): Real-time Preview & Diff */}
-        <section className="flex flex-1 flex-col overflow-hidden min-w-[400px]">
-          <LivePreviewPanel
-            preview={preview}
-            isLoading={isPreviewLoading}
-          />
-        </section>
-      </main>
+          {/* Right Pane (50%): Real-time Preview & Diff */}
+          <section className="flex flex-1 flex-col overflow-hidden min-w-[400px]">
+            <LivePreviewPanel
+              preview={preview}
+              isLoading={isPreviewLoading}
+            />
+          </section>
+        </main>
+      )}
     </div>
   );
 }

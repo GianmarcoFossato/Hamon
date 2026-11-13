@@ -6,9 +6,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Database,
-  FileJson,
   FileText,
-  Layers,
   RefreshCw,
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
@@ -45,22 +43,22 @@ export default function HistoryPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 flex flex-col font-sans">
-      {/* Navbar */}
-      <header className="border-b border-slate-200 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900 sticky top-0 z-50">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8 h-16">
+    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
+      {/* Top Navbar */}
+      <header className="border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-50">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 h-14">
           <div className="flex items-center gap-3">
             <Link href="/">
-              <Button variant="ghost" size="iconXs">
-                <ArrowLeft className="h-4 w-4" />
+              <Button variant="ghost" size="iconXs" className="size-7">
+                <ArrowLeft className="size-4" />
               </Button>
             </Link>
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+            <div className="size-6 rounded-md bg-primary text-primary-foreground flex items-center justify-center font-bold text-xs shadow-xs">
               H
             </div>
             <div>
-              <h1 className="text-base font-bold tracking-tight">Extraction History</h1>
-              <p className="text-xs text-slate-500">
+              <h1 className="text-sm font-semibold tracking-tight text-foreground">Extraction History</h1>
+              <p className="text-[11px] text-muted-foreground hidden sm:block">
                 Audit and inspect previously extracted documents and committed records
               </p>
             </div>
@@ -72,13 +70,13 @@ export default function HistoryPage() {
               size="xs"
               onClick={loadHistory}
               disabled={loading}
-              className="gap-1.5 text-xs"
+              className="gap-1.5 text-xs h-7"
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw className={`size-3 ${loading ? "animate-spin" : ""}`} />
               <span>Refresh</span>
             </Button>
             <Link href="/">
-              <Button size="xs" className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs">
+              <Button size="xs" variant="default" className="text-xs h-7">
                 New Extraction
               </Button>
             </Link>
@@ -87,40 +85,40 @@ export default function HistoryPage() {
       </header>
 
       {/* Main Content */}
-      <main className="mx-auto max-w-7xl w-full flex-1 px-4 sm:px-6 lg:px-8 py-8">
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
+      <main className="mx-auto max-w-7xl w-full flex-1 px-4 sm:px-6 py-6">
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs font-semibold">Document</TableHead>
-                <TableHead className="text-xs font-semibold">Status</TableHead>
-                <TableHead className="text-xs font-semibold">Pages</TableHead>
-                <TableHead className="text-xs font-semibold">Tokens</TableHead>
-                <TableHead className="text-xs font-semibold">Harmonization</TableHead>
-                <TableHead className="text-xs font-semibold">Date</TableHead>
-                <TableHead className="text-xs font-semibold text-right">Actions</TableHead>
+              <TableRow className="border-b border-border bg-muted/40">
+                <TableHead className="text-xs font-semibold text-muted-foreground">Document</TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground">Status</TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground">Pages</TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground">Tokens</TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground">Harmonization</TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground">Date</TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-12 text-center text-xs text-slate-400">
+                  <TableCell colSpan={7} className="py-12 text-center text-xs text-muted-foreground">
                     Loading extraction history...
                   </TableCell>
                 </TableRow>
               ) : jobs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-12 text-center text-xs text-slate-400">
+                  <TableCell colSpan={7} className="py-12 text-center text-xs text-muted-foreground">
                     No extraction jobs found. Upload a document to get started.
                   </TableCell>
                 </TableRow>
               ) : (
                 jobs.map((job) => (
-                  <TableRow key={job.id}>
+                  <TableRow key={job.id} className="border-b border-border hover:bg-muted/30">
                     <TableCell className="align-middle">
                       <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-indigo-500 shrink-0" />
-                        <span className="font-medium text-xs text-slate-800 dark:text-slate-200">
+                        <FileText className="size-3.5 text-muted-foreground shrink-0" />
+                        <span className="font-medium text-xs text-foreground">
                           {job.filename || "Untitled"}
                         </span>
                       </div>
@@ -130,39 +128,37 @@ export default function HistoryPage() {
                       <Badge
                         variant={
                           job.status === "completed"
-                            ? "success"
-                            : job.status === "partial_success"
-                            ? "warning"
+                            ? "default"
                             : job.status === "failed" || job.status === "harmonize_failed"
                             ? "destructive"
                             : "secondary"
                         }
-                        className="text-[10px] capitalize"
+                        className="text-[10px] capitalize h-4.5"
                       >
                         {job.status.replace("_", " ")}
                       </Badge>
                     </TableCell>
 
-                    <TableCell className="align-middle text-xs">
+                    <TableCell className="align-middle text-xs text-muted-foreground">
                       {job.requested_pages?.length || 1}
                     </TableCell>
 
-                    <TableCell className="align-middle text-xs font-mono">
+                    <TableCell className="align-middle text-xs font-mono text-muted-foreground">
                       {job.token_usage?.total_tokens?.toLocaleString() || "0"}
                     </TableCell>
 
                     <TableCell className="align-middle">
                       {job.harmonized ? (
-                        <Badge variant="success" className="text-[10px] gap-1">
-                          <Database className="h-3 w-3" />
+                        <Badge variant="secondary" className="text-[10px] gap-1 h-4.5">
+                          <Database className="size-3" />
                           <span>{job.harmonized_target_collection || "Committed"}</span>
                         </Badge>
                       ) : (
-                        <span className="text-xs text-slate-400">Pending</span>
+                        <span className="text-xs text-muted-foreground">Pending</span>
                       )}
                     </TableCell>
 
-                    <TableCell className="align-middle text-xs text-slate-500">
+                    <TableCell className="align-middle text-xs text-muted-foreground">
                       {new Date(job.created_at).toLocaleDateString()}{" "}
                       {new Date(job.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </TableCell>
@@ -173,10 +169,10 @@ export default function HistoryPage() {
                           <Button
                             variant="outline"
                             size="xs"
-                            className="h-7 gap-1 text-[11px] text-indigo-600 dark:text-indigo-400"
+                            className="h-7 gap-1 text-[11px]"
                           >
                             <span>Harmonize</span>
-                            <ArrowRight className="h-3 w-3" />
+                            <ArrowRight className="size-3" />
                           </Button>
                         </Link>
                       )}

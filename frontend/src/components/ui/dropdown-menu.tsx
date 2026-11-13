@@ -80,7 +80,7 @@ const DropdownMenuItem = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
     inset?: boolean
   }
->(({ className, inset, ...props }, ref) => (
+>(({ className, inset, onClick, onSelect, ...props }, ref) => (
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
@@ -88,6 +88,13 @@ const DropdownMenuItem = React.forwardRef<
       inset && "pl-8",
       className
     )}
+    onSelect={(event) => {
+      onSelect?.(event);
+      if (!event.defaultPrevented && onClick) {
+        onClick(event as unknown as React.MouseEvent<HTMLDivElement>);
+      }
+    }}
+    onClick={onClick}
     {...props}
   />
 ))

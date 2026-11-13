@@ -5,9 +5,7 @@ import Link from "next/link";
 import {
   ArrowRight,
   Check,
-  CheckCircle2,
   Copy,
-  Database,
   FileJson,
   Layers,
   Table as TableIcon,
@@ -62,26 +60,24 @@ export function ResultsPanel({ job, streamingStatus }: ResultsPanelProps) {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card">
       {/* Header with live SSE Status and Token Usage */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-4 py-2.5">
         <div className="flex items-center gap-2.5">
-          <FileJson className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-          <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+          <FileJson className="size-4 text-muted-foreground" />
+          <span className="text-xs font-semibold tracking-tight text-foreground">
             Extraction Results
           </span>
 
           <Badge
             variant={
               activeStatus === "completed"
-                ? "success"
-                : activeStatus === "partial_success"
-                ? "warning"
+                ? "default"
                 : activeStatus === "failed"
                 ? "destructive"
                 : "secondary"
             }
-            className="text-[10px] capitalize"
+            className="text-[10px] capitalize h-4.5"
           >
             {activeStatus.replace("_", " ")}
           </Badge>
@@ -90,16 +86,16 @@ export function ResultsPanel({ job, streamingStatus }: ResultsPanelProps) {
         {/* Tokens & CTA */}
         <div className="flex items-center gap-2">
           {job?.token_usage && (
-            <span className="text-[11px] font-mono text-slate-500">
+            <span className="text-[11px] font-mono text-muted-foreground">
               {job.token_usage.total_tokens.toLocaleString()} tokens
             </span>
           )}
 
           {job && job.status === "completed" && (
             <Link href={`/harmonize/${job.id}`}>
-              <Button size="xs" className="gap-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs">
+              <Button size="xs" variant="default" className="gap-1.5 text-xs h-7">
                 <span>Harmonize Data</span>
-                <ArrowRight className="h-3 w-3" />
+                <ArrowRight className="size-3" />
               </Button>
             </Link>
           )}
@@ -110,10 +106,10 @@ export function ResultsPanel({ job, streamingStatus }: ResultsPanelProps) {
       {(activeStatus === "extracting" ||
         activeStatus === "waiting_for_render" ||
         activeStatus === "merging") && (
-        <div className="border-b border-slate-100 bg-indigo-50/50 px-4 py-2 dark:border-slate-800/60 dark:bg-indigo-950/20">
-          <div className="flex items-center justify-between text-[11px] font-medium text-indigo-700 dark:text-indigo-300">
+        <div className="border-b border-border bg-muted/40 px-4 py-2">
+          <div className="flex items-center justify-between text-[11px] font-medium text-foreground">
             <span>{streamingStatus?.message || "Processing extraction..."}</span>
-            <span>{progressPercent}%</span>
+            <span className="tabular-nums font-mono">{progressPercent}%</span>
           </div>
           <Progress value={progressPercent} className="mt-1.5 h-1.5" />
         </div>
@@ -121,8 +117,8 @@ export function ResultsPanel({ job, streamingStatus }: ResultsPanelProps) {
 
       {/* Main Content Area */}
       {!rawData ? (
-        <div className="flex flex-1 flex-col items-center justify-center p-8 text-center text-slate-400">
-          <Layers className="h-8 w-8 stroke-1 text-slate-300 dark:text-slate-700" />
+        <div className="flex flex-1 flex-col items-center justify-center p-8 text-center text-muted-foreground">
+          <Layers className="size-8 stroke-1 text-muted-foreground/50" />
           <p className="mt-2 text-xs">
             Run extraction on an uploaded document to view structured data here.
           </p>
@@ -133,12 +129,12 @@ export function ResultsPanel({ job, streamingStatus }: ResultsPanelProps) {
             <div className="flex items-center justify-between pb-2">
               <TabsList className="h-7 p-0.5">
                 <TabsTrigger value="json" className="text-xs gap-1 px-2.5 py-0.5">
-                  <FileJson className="h-3 w-3" />
+                  <FileJson className="size-3" />
                   JSON Tree
                 </TabsTrigger>
                 {tabularRows.length > 0 && (
                   <TabsTrigger value="table" className="text-xs gap-1 px-2.5 py-0.5">
-                    <TableIcon className="h-3 w-3" />
+                    <TableIcon className="size-3" />
                     Table ({tabularRows.length})
                   </TabsTrigger>
                 )}
@@ -152,12 +148,12 @@ export function ResultsPanel({ job, streamingStatus }: ResultsPanelProps) {
               >
                 {copied ? (
                   <>
-                    <Check className="h-3 w-3 text-emerald-600" />
+                    <Check className="size-3 text-emerald-600" />
                     Copied!
                   </>
                 ) : (
                   <>
-                    <Copy className="h-3 w-3" />
+                    <Copy className="size-3" />
                     Copy JSON
                   </>
                 )}
@@ -165,20 +161,20 @@ export function ResultsPanel({ job, streamingStatus }: ResultsPanelProps) {
             </div>
 
             {/* JSON View */}
-            <TabsContent value="json" className="flex-1 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 font-mono text-xs dark:border-slate-800 dark:bg-slate-950">
-              <pre className="whitespace-pre-wrap leading-relaxed text-slate-800 dark:text-slate-200">
+            <TabsContent value="json" className="flex-1 overflow-auto rounded-lg border border-border bg-muted/20 p-3 font-mono text-xs">
+              <pre className="whitespace-pre-wrap leading-relaxed text-foreground">
                 {JSON.stringify(rawData, null, 2)}
               </pre>
             </TabsContent>
 
             {/* Tabular View */}
             {tabularRows.length > 0 && (
-              <TabsContent value="table" className="flex-1 overflow-auto rounded-lg border border-slate-200 dark:border-slate-800">
+              <TabsContent value="table" className="flex-1 overflow-auto rounded-lg border border-border bg-card">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       {Object.keys(tabularRows[0] || {}).map((col) => (
-                        <TableHead key={col} className="text-xs font-semibold capitalize">
+                        <TableHead key={col} className="text-xs font-semibold capitalize text-muted-foreground">
                           {col.replace("_", " ")}
                         </TableHead>
                       ))}
@@ -188,7 +184,7 @@ export function ResultsPanel({ job, streamingStatus }: ResultsPanelProps) {
                     {tabularRows.map((row, rIdx) => (
                       <TableRow key={rIdx}>
                         {Object.keys(tabularRows[0] || {}).map((col) => (
-                          <TableCell key={col} className="text-xs">
+                          <TableCell key={col} className="text-xs text-foreground">
                             {row[col] !== null && row[col] !== undefined
                               ? String(row[col])
                               : "—"}

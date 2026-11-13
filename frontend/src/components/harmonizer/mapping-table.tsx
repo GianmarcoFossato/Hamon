@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Code2, Plus, Sparkles, Trash2 } from "lucide-react";
+import { Check, Code2, Plus, Trash2 } from "lucide-react";
 import { FieldMappingItem, TransformType } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -89,11 +89,11 @@ export function MappingTable({
   };
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card">
       {/* Table Header Bar */}
-      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2.5 dark:border-slate-800 dark:bg-slate-950">
+      <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2.5">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+          <span className="text-xs font-semibold tracking-tight text-foreground">
             Field Alignments ({mappings.length})
           </span>
         </div>
@@ -104,9 +104,9 @@ export function MappingTable({
               variant="outline"
               size="xs"
               onClick={onAcceptHighConfidence}
-              className="h-7 gap-1 text-[11px] text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50"
+              className="h-7 gap-1 text-[11px]"
             >
-              <Check className="h-3 w-3" />
+              <Check className="size-3 text-emerald-600" />
               <span>Accept High Confidence (&ge;85%)</span>
             </Button>
           )}
@@ -117,7 +117,7 @@ export function MappingTable({
             onClick={handleAddMapping}
             className="h-7 gap-1 text-[11px]"
           >
-            <Plus className="h-3 w-3" />
+            <Plus className="size-3" />
             <span>Add Row</span>
           </Button>
         </div>
@@ -127,17 +127,17 @@ export function MappingTable({
       <div className="flex-1 overflow-auto">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead className="w-[30%] text-xs font-semibold">
+            <TableRow className="border-b border-border bg-muted/30">
+              <TableHead className="w-[30%] text-xs font-semibold text-muted-foreground">
                 Extracted Source Field
               </TableHead>
-              <TableHead className="w-[28%] text-xs font-semibold">
+              <TableHead className="w-[28%] text-xs font-semibold text-muted-foreground">
                 Transform Recipe
               </TableHead>
-              <TableHead className="w-[30%] text-xs font-semibold">
+              <TableHead className="w-[30%] text-xs font-semibold text-muted-foreground">
                 Target Enterprise Field
               </TableHead>
-              <TableHead className="w-[12%] text-xs font-semibold text-right">
+              <TableHead className="w-[12%] text-xs font-semibold text-muted-foreground text-right">
                 Confidence / Action
               </TableHead>
             </TableRow>
@@ -147,7 +147,7 @@ export function MappingTable({
               <TableRow>
                 <TableCell
                   colSpan={4}
-                  className="py-12 text-center text-xs text-slate-400"
+                  className="py-12 text-center text-xs text-muted-foreground"
                 >
                   No field mappings yet. Click &quot;Auto Match&quot; or &quot;Add
                   Row&quot; to begin.
@@ -159,7 +159,7 @@ export function MappingTable({
                 const sampleVal = sampleRow[m.source_path];
 
                 return (
-                  <TableRow key={idx}>
+                  <TableRow key={idx} className="border-b border-border hover:bg-muted/30">
                     {/* Column 1: Source Field */}
                     <TableCell className="align-middle">
                       <div className="flex flex-col gap-1">
@@ -187,7 +187,7 @@ export function MappingTable({
 
                         {sampleVal !== undefined && (
                           <span
-                            className="max-w-[200px] truncate text-[10px] text-slate-400 font-mono"
+                            className="max-w-[200px] truncate text-[10px] text-muted-foreground font-mono"
                             title={String(sampleVal)}
                           >
                             Sample: {String(sampleVal)}
@@ -230,8 +230,9 @@ export function MappingTable({
                             size="iconXs"
                             onClick={() => setActiveFormulaIndex(idx)}
                             title="Edit Sandbox Formula"
+                            className="size-7"
                           >
-                            <Code2 className="h-3 w-3 text-indigo-600" />
+                            <Code2 className="size-3" />
                           </Button>
                         )}
                       </div>
@@ -284,12 +285,10 @@ export function MappingTable({
                           <Badge
                             variant={
                               conf >= 0.85
-                                ? "success"
-                                : conf >= 0.6
-                                ? "warning"
-                                : "outline"
+                                ? "default"
+                                : "secondary"
                             }
-                            className="text-[10px] px-1.5 py-0"
+                            className="text-[10px] px-1.5 py-0 h-4.5"
                           >
                             {Math.round(conf * 100)}%
                           </Badge>
@@ -299,9 +298,9 @@ export function MappingTable({
                           variant="ghost"
                           size="iconXs"
                           onClick={() => handleRemoveMapping(idx)}
-                          className="text-slate-400 hover:text-red-600"
+                          className="size-7 text-muted-foreground hover:text-destructive"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <Trash2 className="size-3.5" />
                         </Button>
                       </div>
                     </TableCell>

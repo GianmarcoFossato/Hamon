@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Code2, Play, Sparkles } from "lucide-react";
+import { Code2, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

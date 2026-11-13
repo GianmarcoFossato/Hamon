@@ -17,10 +17,11 @@ export function Input({
   className,
   size = "default",
   unstyled = false,
-  nativeInput: _nativeInput = false,
+  nativeInput = false,
   style,
   ...props
 }: InputProps): React.ReactElement {
+  void nativeInput;
   const inputPaddingClass = unstyled ? "px-3" : "px-[calc(--spacing(3)-1px)]";
   const smallInputPaddingClass = unstyled
     ? "px-2.5"
